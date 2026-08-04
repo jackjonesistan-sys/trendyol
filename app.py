@@ -1,5 +1,6 @@
 import os
 import glob
+import math
 import openpyxl
 import pandas as pd
 from datetime import datetime, timedelta
@@ -36,8 +37,6 @@ REPORT_COLUMNS = [
     "Uygulanan Kampanya Komisyon",
     "Uygulanabilecek İndirim (TL)",
     "Uygulanabilecek İndirim (%)",
-    "Mevcut İndirim (TL)",
-    "Mevcut İndirim (%)",
     "Uygulanan İndirim (TL)",
     "Uygulanan İndirim (%)",
     "Ekstra Uygulanabilir İndirim (TL)",
@@ -45,6 +44,13 @@ REPORT_COLUMNS = [
     "Hangisi Karlı?",
     "Düşülebilecek Dip Fiyat (TL)",
 ]
+ROUNDING_EPSILON = 1e-9
+
+CAMPAIGN_LABELS = {
+    "Avantajlı": "Avantajlı Ürün",
+    "Flaş": "Flaş Ürün",
+    "Plus": "Plus Ürün",
+}
 
 
 def as_number(value):
@@ -55,13 +61,17 @@ def as_number(value):
     return None if pd.isna(number) else number
 
 
+def round2(value):
+    return math.floor((float(value) * 100) + 0.5 + ROUNDING_EPSILON) / 100
+
+
 def discount_between(current_price, campaign_price):
     current = as_number(current_price)
     campaign = as_number(campaign_price)
-    if current is None or campaign is None or current <= 0:
+    if current is None or campaign is None or current <= 0 or campaign <= 0:
         return None, None
-    amount = round(current - campaign, 2)
-    return amount, round((amount / current) * 100, 2)
+    amount = round2(max(current - campaign, 0))
+    return amount, round2((amount / current) * 100)
 
 
 def selected_campaign_values(row):
@@ -122,22 +132,22 @@ def build_report_row(row):
     is_discount_eligible = row.get("İndirim Uygulanabilir") == "Evet"
     current_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
     campaign_price, campaign_net, campaign_commission = selected_campaign_values(row)
-    applied_amount, applied_percent = (
-        discount_between(current_price, campaign_price)
-        if selection != "Hiçbiri"
+    applied_amount, applied_percent = discount_between(current_price, campaign_price)
+    dip_price = (
+        as_number(row.get("Düşülebilecek Dip Fiyat (TL)"))
+        if is_discount_eligible
+        else None
+    )
+    available_amount, available_percent = (
+        discount_between(current_price, dip_price)
+        if is_discount_eligible
         else (None, None)
     )
-
-    available_amount = as_number(row.get("Uygulanabilecek İndirim (TL)")) if is_discount_eligible else None
-    available_percent = as_number(row.get("Uygulanabilecek İndirim (%)")) if is_discount_eligible else None
     extra_amount = None
     extra_percent = None
-    if available_amount is not None:
-        remaining = round(available_amount - (applied_amount or 0), 2)
-        extra_amount = remaining if remaining > 0 else None
-    if available_percent is not None:
-        remaining = round(available_percent - (applied_percent or 0), 2)
-        extra_percent = remaining if remaining > 0 else None
+    if available_amount is not None and applied_amount is not None:
+        extra_amount = round2(max(available_amount - applied_amount, 0))
+        extra_percent = round2((extra_amount / current_price) * 100)
 
     plus_extra_price = None
     plus_extra_net = None
@@ -159,20 +169,18 @@ def build_report_row(row):
         "Plus Net": as_number(row.get("Plus Net (TL)")),
         "Plus Ek İndirim Fiyat (TL)": plus_extra_price,
         "Plus Ek İndirim Net": plus_extra_net,
-        "Uygulanan Kampanya": selection,
+        "Uygulanan Kampanya": CAMPAIGN_LABELS.get(selection, selection),
         "Uygulanan Kampanya Fiyat": campaign_price,
         "Uygulanan Kampanya Net": campaign_net,
         "Uygulanan Kampanya Komisyon": campaign_commission,
         "Uygulanabilecek İndirim (TL)": available_amount,
         "Uygulanabilecek İndirim (%)": available_percent,
-        "Mevcut İndirim (TL)": as_number(row.get("Mevcut İndirim (TL)")),
-        "Mevcut İndirim (%)": as_number(row.get("Mevcut İndirim (%)")),
         "Uygulanan İndirim (TL)": applied_amount,
         "Uygulanan İndirim (%)": applied_percent,
         "Ekstra Uygulanabilir İndirim (TL)": extra_amount,
         "Ekstra Uygulanabilir İndirim (%)": extra_percent,
         "Hangisi Karlı?": row.get("Hangisi Daha Karlı?"),
-        "Düşülebilecek Dip Fiyat (TL)": as_number(row.get("Düşülebilecek Dip Fiyat (TL)")) if is_discount_eligible else None,
+        "Düşülebilecek Dip Fiyat (TL)": dip_price,
     }
 
 
@@ -189,6 +197,18 @@ def build_report_dataframe(table_data, requested_columns):
     rows = [build_report_row(row) for row in table_data if row.get("Barkod")]
     columns = normalize_visible_columns(requested_columns)
     return pd.DataFrame(rows, columns=REPORT_COLUMNS)[columns]
+
+
+def write_report_excel(dataframe, output_path):
+    dataframe.to_excel(output_path, index=False)
+    workbook = openpyxl.load_workbook(output_path)
+    sheet = workbook.active
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    for index, column in enumerate(dataframe.columns, 1):
+        letter = openpyxl.utils.get_column_letter(index)
+        sheet.column_dimensions[letter].width = max(len(str(column)) + 2, 12)
+    workbook.save(output_path)
 
 
 @app.route("/api/download/<folder>/<filename>")
@@ -283,7 +303,7 @@ def shrink_data_validations(ws):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", report_columns=REPORT_COLUMNS)
 
 @app.route("/api/data")
 def get_data():
@@ -666,7 +686,7 @@ def apply_campaign():
             # 3. Sayfada seçilen sütunlarla aynı sıradaki özet rapor
             df_summary = build_report_dataframe(table_data, visible_columns)
             out_summary = os.path.join(run_output_dir, "Kampanya_Ozet_Raporu.xlsx")
-            df_summary.to_excel(out_summary, index=False)
+            write_report_excel(df_summary, out_summary)
             fix_xlsx_for_trendyol(out_summary)
             generated_files.append(os.path.join(timestamp_folder, "Kampanya_Ozet_Raporu.xlsx"))
             
