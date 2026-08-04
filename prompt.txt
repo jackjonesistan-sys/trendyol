@@ -1,0 +1,28 @@
+excel tablosunun ve sayfadaki tablonun sonuna yeni bir sütun daha ekleyelim ve düşülebilecek dip fiyat yazalım, bu bilgiyi de yine sadece indirim uygulanabilecek ürünlerdeki ürünlere ve yeni fiyatları bu sütunda göstererek yapalım. ayrıca sayfada görünen sütunlar sırasıyla şunlardan oluşsun:
+Barkod
+Güncel Fiyat (TL)
+Güncel Net
+Güncel Komisyon
+Avantajlı Fiyat (TL)
+Avantajlı Net
+Flaş Fiyat (TL)
+Flaş Net
+Plus Fiyat (TL)
+Plus Net
+Plus Ek İndirim Fiyat (TL)
+Plus Ek İndirim Net
+Uygulanan Kampanya
+Uygulanan Kampanya Fiyat
+Uygulanan Kampanya Net
+Uygulanan Kampanya Komisyon
+Uygulanabilecek İndirim (TL)
+Uygulanabilecek İndirim (%)
+Mevcut İndirim (TL)
+Mevcut İndirim (%)
+Uygulanan İndirim (TL)
+Uygulanan İndirim (%)
+Ekstra Uygulanabilir İndirim (TL)
+Ekstra Uygulanabilir İndirim (%)
+Hangisi Karlı?
+
+-varsayılan olarak görünür olanlar aynı kalsın, ve görünürlük seçimi hangisinde var ise excel çıktısında onlar görünsün
