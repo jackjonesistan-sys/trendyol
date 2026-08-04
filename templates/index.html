@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="lofi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Trendyol Kampanya Yönetimi</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS & DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .highlight {
+            font-weight: 700;
+            color: #ef4444;
+            /* Tailwind red-500 */
+        }
+
+        /* Modern DataTables Styling */
+        table.dataTable {
+            border-collapse: collapse !important;
+            width: 100% !important;
+        }
+
+        table.dataTable thead th {
+            border: 1px solid #d1d5db !important;
+            background-color: #f3f4f6;
+            color: #111827;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            padding: 1rem 0.5rem !important;
+        }
+
+        table.dataTable tbody td {
+            padding: 0.75rem 0.5rem !important;
+            vertical-align: middle;
+            border: 1px solid #e5e7eb !important;
+            color: #1f2937;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        table.dataTable tbody tr:hover {
+            background-color: #f9fafb !important;
+        }
+
+        .dataTables_filter input {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            background: #fff;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .dataTables_filter input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .dataTables_length select {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.375rem 2rem 0.375rem 0.75rem;
+            background: #fff;
+            outline: none;
+        }
+
+        /* Row Colors */
+        .row-avantajli {
+            background-color: #dcfce7 !important;
+        }
+
+        .row-avantajli:hover {
+            background-color: #bbf7d0 !important;
+        }
+
+        .row-flas {
+            background-color: #e0f2fe !important;
+        }
+
+        .row-flas:hover {
+            background-color: #bae6fd !important;
+        }
+
+        .row-plus {
+            background-color: #fef08a !important;
+        }
+
+        .row-plus:hover {
+            background-color: #fde047 !important;
+        }
+
+        #loadingOverlay {
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Custom scrollbar for table container */
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen text-gray-800">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);"
+        class="flex-col justify-center items-center text-white">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <h2 class="mt-4 text-xl font-medium tracking-wide">İşlemler gerçekleştiriliyor, lütfen bekleyin...</h2>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast toast-top toast-end z-[9999]" id="toastContainer"></div>
+
+    <!-- Header Navbar -->
+    <div class="navbar bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 px-4 md:px-8 shadow-sm">
+        <div class="flex-1 gap-3 flex items-center">
+            <div class="p-2 bg-primary/10 rounded-xl text-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight text-gray-900">Trendyol Kampanya Yönetimi</h1>
+        </div>
+        <div class="flex-none gap-2">
+            <button
+                class="btn btn-primary btn-sm shadow-md shadow-primary/20 hover:-translate-y-0.5 transition-transform"
+                onclick="calculateData()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Verileri Hesapla
+            </button>
+        </div>
+    </div>
+
+    <div class="p-4 md:p-8 w-full max-w-none space-y-6">
+
+        <!-- Control Panel Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left Panel: Actions & Bulk -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <div class="card bg-white shadow-sm border border-gray-100 h-full">
+                    <div class="card-body p-6">
+                        <div class="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                            </svg>
+                            <h2 class="card-title text-lg font-semibold text-gray-800">Toplu İşlemler ve Seçimler</h2>
+                        </div>
+
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div class="flex-1 min-w-[200px]">
+                                <label class="label px-0 py-1"><span
+                                        class="label-text text-xs font-medium text-gray-500">Hızlı Seçim</span></label>
+                                <div class="flex gap-2">
+                                    <button
+                                        class="btn btn-outline btn-sm border-gray-300 hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
+                                        onclick="autoSelect()">Önerilenleri Seç</button>
+                                    <button
+                                        class="btn btn-ghost btn-sm text-gray-500 hover:bg-gray-100 transition-colors"
+                                        onclick="clearSelections()">Seçim Temizle</button>
+                                </div>
+                            </div>
+
+                            <div class="w-px h-10 bg-gray-200 hidden md:block"></div>
+
+                            <div class="flex-1 min-w-[300px]">
+                                <label class="label px-0 py-1"><span
+                                        class="label-text text-xs font-medium text-gray-500">Toplu Kampanya
+                                        Uygula</span></label>
+                                <div class="join w-full shadow-sm">
+                                    <select id="bulkCampaignSelect"
+                                        class="select select-bordered select-sm join-item focus:outline-none w-full bg-gray-50 border-gray-300">
+                                        <option value="Avantajlı">Avantajlı Yap</option>
+                                        <option value="Flaş">Flaş Yap</option>
+                                        <option value="Plus">Plus Yap</option>
+                                        <option value="Plus Ek İndirim %5">Plus Ek İndirim %5 Yap</option>
+                                        <option value="Plus Ek İndirim %10">Plus Ek İndirim %10 Yap</option>
+                                        <option value="Plus Ek İndirim %20">Plus Ek İndirim %20 Yap</option>
+                                        <option value="Karşılamalı Kampanya">Karşılamalı Kampanya Yap</option>
+                                        <option value="Hiçbiri">Hiçbiri (Temizle)</option>
+                                    </select>
+                                    <button class="btn btn-neutral btn-sm join-item px-6 font-medium"
+                                        onclick="applyBulkAction()">Uygula</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel: Export Options -->
+            <div class="lg:col-span-4">
+                <div class="card bg-white shadow-sm border border-gray-100 h-full">
+                    <div class="card-body p-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <h2 class="card-title text-lg font-semibold text-gray-800">Dışa Aktar ve Uygula</h2>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-4">Seçtiğiniz kampanyaları Trendyol şablon Excel
+                                dosyalarına uygulayarak doğrudan indirilebilir çıktı oluşturun.</p>
+                        </div>
+
+                        <div class="dropdown dropdown-end w-full">
+                            <div tabindex="0" role="button"
+                                class="btn btn-success text-white w-full shadow-md shadow-success/20 hover:-translate-y-0.5 transition-transform">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Excel'e Uygula
+                            </div>
+                            <ul tabindex="0"
+                                class="dropdown-content z-[100] menu p-2 shadow-lg bg-white rounded-box w-full mt-2 font-medium text-sm border border-gray-100">
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Hepsi'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Hepsini Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Avantajlı'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Avantajlı Oluştur</button>
+                                </li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Flaş'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Flaş Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Plus'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Plus Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Plus Ek İndirim'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Plus Ek İndirim
+                                        Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Karşılamalı Kampanya'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Karşılamalı Kampanya
+                                        Oluştur</button></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table Card -->
+        <div class="card bg-white shadow-xl border border-gray-200 overflow-hidden rounded-2xl w-full">
+            <div class="card-body p-0 w-full">
+                <div class="table-container w-full overflow-x-auto p-4">
+                    <table id="campaignTable" class="table table-compact w-full border-collapse border border-gray-200">
+                        <thead
+                            class="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider border-b-2 border-slate-200">
+                            <tr>
+                                <th style="width:35px; text-align:center;"><input type="checkbox" id="selectAll"
+                                        class="checkbox checkbox-sm checkbox-primary" onclick="toggleAll(this)"
+                                        title="Tümünü Seç"></th>
+                                <th>Barkod</th>
+                                <th>Güncel Fiyat (TL)</th>
+                                <th>Güncel Net</th>
+                                <th>Avantajlı Fiyat (TL)</th>
+                                <th>Avantajlı Net</th>
+                                <th>Flaş Fiyat (TL)</th>
+                                <th>Flaş Net</th>
+                                <th>Plus Fiyatı (TL)</th>
+                                <th>Plus Net</th>
+                                <th>Plus Ek İndirim Fiyatı (TL)</th>
+                                <th>Plus Ek İndirim Net</th>
+                                <th>Mevcut İndirim (%)</th>
+                                <th>Güncel Fark (%)</th>
+                                <th>Ekstra Uygulanabilir İndirim (%)</th>
+                                <th>Hangisi Karlı?</th>
+                                <th>Seçim</th>
+                            </tr>
+                            <tr class="filters bg-gray-50/50">
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- jQuery and DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        let tableData = [];
+        let dataTable = null;
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            let alertClass = 'bg-blue-600 text-white border-none shadow-xl';
+            if (type === 'success') alertClass = 'bg-green-600 text-white border-none shadow-xl';
+            if (type === 'warning') alertClass = 'bg-yellow-500 text-white border-none shadow-xl';
+            if (type === 'error') alertClass = 'bg-red-600 text-white border-none shadow-xl';
+
+            const toastHtml = `
+                <div class="alert ${alertClass} mb-2 flex flex-row items-center gap-3 transition-all duration-300 rounded-lg px-4 py-3 font-medium">
+                    <span>${message}</span>
+                </div>
+            `;
+            const toastEl = $(toastHtml).appendTo(container);
+            setTimeout(() => {
+                toastEl.fadeOut(300, function () { $(this).remove(); });
+            }, 3500);
+        }
+
+        function getEkstraIndirim(row) {
+            let sel = row.userSelection || 'Hi\u00e7biri';
+
+            let eskiFiyat = parseFloat(row['G\u00fcncel \u00dcr\u00fcn Fiyat\u0131 (TL)']);
+            if (isNaN(eskiFiyat) || eskiFiyat <= 0) return null;
+
+            let mevcutIndirim = parseFloat(row['Mevcut \u0130ndirim Oran\u0131 (%)']);
+            if (isNaN(mevcutIndirim)) mevcutIndirim = null;
+
+            // Sadece indirim uygulanabilecek \u00fcr\u00fcnlerde g\u00f6ster
+            if (row['\u0130ndirim Uygulanabilir'] !== 'Evet') return null;
+            if (mevcutIndirim === null) return null;
+
+            if (sel === 'Hi\u00e7biri') {
+                // Kampanya se\u00e7ilmemi\u015f: maksimum uygulanabilecek indirimin tamam\u0131 kald\u0131
+                return mevcutIndirim > 0 ? mevcutIndirim : null;
+            }
+
+            let uygulananFiyat = null;
+            if (sel === 'Avantajl\u0131') uygulananFiyat = parseFloat(row['Avantajl\u0131 \u00dcr\u00fcn Fiyat\u0131 (YEN\u0130 TSF) (TL)']);
+            else if (sel === 'Fla\u015f') uygulananFiyat = parseFloat(row['Fla\u015f \u00dcr\u00fcn 24 Saat Fiyat\u0131 (TL)']);
+            else if (sel === 'Plus') uygulananFiyat = parseFloat(row['Plus Fiyat\u0131 (TL)']);
+            else if (sel === 'Plus Ek \u0130ndirim %5') uygulananFiyat = parseFloat(row['Plus Ek Fiyat\u0131 %5 (TL)']);
+            else if (sel === 'Plus Ek \u0130ndirim %10') uygulananFiyat = parseFloat(row['Plus Ek Fiyat\u0131 %10 (TL)']);
+            else if (sel === 'Plus Ek \u0130ndirim %20') uygulananFiyat = parseFloat(row['Plus Ek Fiyat\u0131 %20 (TL)']);
+            else if (sel === 'Kar\u015f\u0131lamal\u0131 Kampanya') uygulananFiyat = parseFloat(row['Kar\u015f\u0131lamal\u0131 Kampanya Fiyat\u0131 (TL)']);
+
+            if (isNaN(uygulananFiyat) || uygulananFiyat === null || uygulananFiyat <= 0) return null;
+
+            let uygulanmaOrani = ((eskiFiyat - uygulananFiyat) / eskiFiyat) * 100.0;
+            let ekstra = mevcutIndirim - uygulanmaOrani;
+            return ekstra;
+        }
+
+        function loadData() {
+            fetch('/api/data')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.needs_calculation) {
+                        $('#table-body').html(`<tr><td colspan="17" style="text-align:center; padding:30px; font-size: 16px; color: #e74c3c;">
+                            <strong>${data.message}</strong>
+                        </td></tr>`);
+                        return;
+                    }
+                    if (data.error) {
+                        showToast(data.error, 'error');
+                        return;
+                    }
+                    tableData = data.map(row => ({
+                        ...row,
+                        userSelection: 'Hiçbiri',
+                        checked: false
+                    }));
+                    renderTable();
+                    if (data.length > 0) {
+                        const hasKars = data.some(r => r['Karşılamalı Kampanya Eşleşme Durumu'] === 'Eşleşti');
+                        toggleKarsilamaliOptions(hasKars);
+                    }
+                })
+                .catch(err => {
+                    showToast('Veriler yüklenirken hata oluştu: ' + err, 'error');
+                });
+        }
+
+        function toggleKarsilamaliOptions(show) {
+            const bulkOpt = $('#bulkCampaignSelect option[value="Karşılamalı Kampanya"]');
+            if (show) bulkOpt.show();
+            else bulkOpt.hide();
+        }
+
+        function calculateData() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            fetch('/api/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    if (data.success) {
+                        showToast("Veriler başarıyla hesaplandı.", 'success');
+                        loadData();
+                    } else {
+                        showToast("Hesaplama hatası: " + data.message, 'error');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    showToast("İstek başarısız oldu: " + err, 'error');
+                });
+        }
+
+        function applyCampaigns(type) {
+            let selections = {};
+            tableData.forEach(row => {
+                if (row.userSelection && row.userSelection !== 'Hiçbiri') {
+                    selections[row.Barkod] = row.userSelection;
+                }
+            });
+
+            // Eğer kullanıcı henüz manuel seçim yapmadıysa, otomatik olarak önerilen karlı seçimleri uygula
+            if (Object.keys(selections).length === 0) {
+                autoSelect();
+                tableData.forEach(row => {
+                    if (row.userSelection && row.userSelection !== 'Hiçbiri') {
+                        selections[row.Barkod] = row.userSelection;
+                    }
+                });
+            }
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+
+            const payload = {
+                target_type: type,
+                selections: selections
+            };
+
+            fetch('/api/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const fileCount = data.generated_files ? data.generated_files.length : 0;
+                        showToast(`<div><strong>Dosyalar Başarıyla Oluşturuldu!</strong><div class="mt-1 font-normal text-xs text-slate-100">${fileCount} adet Excel dosyası 'Çıktılar' klasörüne kaydedildi.</div></div>`, 'success');
+                    } else {
+                        showToast("İşlem hatası: " + data.message, 'error');
+                    }
+                })
+                .catch(err => {
+                    showToast("İstek atılırken hata oluştu: " + err, 'error');
+                })
+                .finally(() => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                });
+        }
+
+        // Initial load
+        loadData();
+
+        // Remove any previous filter to prevent duplicates
+        $.fn.dataTable.ext.search = $.fn.dataTable.ext.search.filter(
+            fn => fn.name !== 'indirimliFilter'
+        );
+
+        const indirimliFilter = function indirimliFilter(settings, data, dataIndex, rowData) {
+            let isChecked = $('.only-indirimli-filter-cb').is(':checked');
+            if (!isChecked) return true;
+
+            // Sadece indirim listesinden gelen (is_indirim=True) ve pozitif mevcut indirim oran\u0131 olan \u00fcr\u00fcnleri g\u00f6ster
+            if (rowData['\u0130ndirim Uygulanabilir'] !== 'Evet') return false;
+            let indirimVal = rowData['Mevcut \u0130ndirim Oran\u0131 (%)'];
+            if (indirimVal === null || indirimVal === undefined || indirimVal === '' || indirimVal === '-') return false;
+            let numVal = parseFloat(indirimVal);
+            return !isNaN(numVal) && numVal > 0;
+        };
+        $.fn.dataTable.ext.search.push(indirimliFilter);
+
+        function renderColumnToggles() {
+            const container = $('#columnToggleContainer');
+            if (container.length === 0) return;
+            container.empty();
+
+            const colNames = [
+                'Barkod', 'Güncel Fiyat (TL)', 'Güncel Net',
+                'Avantajlı Fiyat (TL)', 'Avantajlı Net', 'Flaş Fiyat (TL)', 'Flaş Net',
+                'Plus Fiyatı (TL)', 'Plus Net', 'Plus Ek İndirim Fiyatı (TL)', 'Plus Ek İndirim Net',
+                'Mevcut İndirim (%)', 'Güncel Fark (%)', 'Ekstra Uygulanabilir İndirim (%)',
+                'Hangisi Karlı?', 'Seçim'
+            ];
+
+            colNames.forEach((name, idx) => {
+                let actualColIdx = idx + 1; // 0 is checkbox
+                let isVisible = dataTable ? dataTable.column(actualColIdx).visible() : true;
+                let checkboxHtml = `
+                    <label class="flex items-center gap-2 py-1 px-1.5 hover:bg-slate-50 rounded cursor-pointer text-gray-700">
+                        <input type="checkbox" class="checkbox checkbox-xs checkbox-primary col-toggle-cb" data-col="${actualColIdx}" ${isVisible ? 'checked' : ''} onchange="toggleColumnVisibility(${actualColIdx}, this.checked)">
+                        <span class="font-medium text-xs">${name}</span>
+                    </label>
+                `;
+                container.append(checkboxHtml);
+            });
+        }
+
+        function toggleColumnVisibility(colIdx, isVisible) {
+            if (dataTable) {
+                dataTable.column(colIdx).visible(isVisible);
+            }
+        }
+
+        function toggleAllColumns(isVisible) {
+            if (!dataTable) return;
+            for (let i = 1; i <= 16; i++) {
+                dataTable.column(i).visible(isVisible);
+            }
+            $('.col-toggle-cb').prop('checked', isVisible);
+        }
+
+        function renderTable() {
+            $('.filters th').empty();
+
+            if (dataTable) dataTable.destroy();
+
+            dataTable = $('#campaignTable').DataTable({
+                data: tableData,
+                pageLength: 50,
+                deferRender: true,
+                orderCellsTop: true,
+                columnDefs: [
+                    { targets: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11], visible: false }
+                ],
+                dom: '<"flex flex-wrap justify-between items-center bg-gray-100 p-4 rounded-lg mb-4 border border-gray-200 shadow-sm"<"flex items-center gap-6"l f <"custom-filter-checkbox">><"custom-col-vis">>rt<"flex flex-wrap justify-between items-center bg-gray-100 p-4 rounded-lg mt-4 border border-gray-200 shadow-sm"<"flex items-center gap-6"l i><"flex items-center gap-4 custom-filter-checkbox-bottom">p>',
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json'
+                },
+                createdRow: function (row, data, dataIndex) {
+                    $(row).removeClass('row-avantajli row-flas row-plus');
+                    if (data.userSelection === 'Avantajlı') {
+                        $(row).addClass('row-avantajli');
+                    } else if (data.userSelection === 'Flaş') {
+                        $(row).addClass('row-flas');
+                    } else if (data.userSelection === 'Plus') {
+                        $(row).addClass('row-plus');
+                    }
+                },
+                columns: [
+                    {
+                        data: null,
+                        orderable: false,
+                        render: function (data, type, row, meta) {
+                            return `<input type="checkbox" class="checkbox checkbox-xs row-checkbox" data-index="${meta.row}" ${row.checked ? 'checked' : ''} onchange="updateCheck(${meta.row}, this.checked)">`;
+                        }
+                    },
+                    { data: 'Barkod', defaultContent: '' },
+                    { data: 'Güncel Ürün Fiyatı (TL)', defaultContent: '-' },
+                    { data: 'Güncel Ürün Kalan Net (TL)', defaultContent: '-' },
+                    { data: 'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)', defaultContent: '-' },
+                    { data: 'Avantajlı Ürün Kalan Net (TL)', defaultContent: '-' },
+                    { data: 'Flaş Ürün 24 Saat Fiyatı (TL)', defaultContent: '-' },
+                    { data: 'Flaş Ürün Kalan Net (TL)', defaultContent: '-' },
+                    { data: 'Plus Fiyatı (TL)', defaultContent: '-' },
+                    { data: 'Plus Net (TL)', defaultContent: '-' },
+                    {
+                        data: null,
+                        orderable: true,
+                        render: function (data, type, row, meta) {
+                            if (type === 'sort' || type === 'filter') return row['Plus Ek Fiyatı %5 (TL)'] || -999;
+                            let sel = row.userSelection || 'Hiçbiri';
+                            if (sel === 'Plus Ek İndirim %5') return row['Plus Ek Fiyatı %5 (TL)'] || '-';
+                            if (sel === 'Plus Ek İndirim %10') return row['Plus Ek Fiyatı %10 (TL)'] || '-';
+                            if (sel === 'Plus Ek İndirim %20') return row['Plus Ek Fiyatı %20 (TL)'] || '-';
+                            return '-';
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: true,
+                        render: function (data, type, row, meta) {
+                            if (type === 'sort' || type === 'filter') return row['Plus Ek Net %5 (TL)'] || -999;
+                            let sel = row.userSelection || 'Hiçbiri';
+                            if (sel === 'Plus Ek İndirim %5') return row['Plus Ek Net %5 (TL)'] || '-';
+                            if (sel === 'Plus Ek İndirim %10') return row['Plus Ek Net %10 (TL)'] || '-';
+                            if (sel === 'Plus Ek İndirim %20') return row['Plus Ek Net %20 (TL)'] || '-';
+                            return '-';
+                        }
+                    },
+                    {
+                        data: 'Mevcut İndirim Oranı (%)',
+                        defaultContent: '-',
+                        render: function (data, type, row) {
+                            if (data !== null && data !== undefined && data !== '' && data !== '-') {
+                                let val = parseFloat(data);
+                                if (!isNaN(val)) return '%' + val.toFixed(2);
+                            }
+                            let eski = parseFloat(row['Güncel Ürün Fiyatı (TL)']);
+                            let satilacak = parseFloat(row['Trendyol\'da Satılacak Fiyat (KDV Dahil)']);
+                            if (isNaN(satilacak)) satilacak = parseFloat(row['Güncel Fiyat (TL)']);
+                            if (!isNaN(eski) && !isNaN(satilacak) && eski > satilacak && satilacak > 0) {
+                                let calcMevcut = ((eski - satilacak) / eski) * 100.0;
+                                return '%' + calcMevcut.toFixed(2);
+                            }
+                            return '-';
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: true,
+                        render: function (data, type, row, meta) {
+                            if (type === 'sort' || type === 'filter') {
+                                return row.dynamicFark || -999;
+                            }
+                            let fark = '';
+                            let sel = row.userSelection || 'Hiçbiri';
+                            let n1 = row['Güncel Ürün Kalan Net (TL)'];
+                            n1 = (n1 && n1 !== '-') ? parseFloat(n1) : 0;
+
+                            let targetNet = null;
+                            if (sel === 'Avantajlı') {
+                                let n = row['Avantajlı Ürün Kalan Net (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Flaş') {
+                                let n = row['Flaş Ürün Kalan Net (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Plus') {
+                                let n = row['Plus Net (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Plus Ek İndirim %5') {
+                                let n = row['Plus Ek Net %5 (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Plus Ek İndirim %10') {
+                                let n = row['Plus Ek Net %10 (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Plus Ek İndirim %20') {
+                                let n = row['Plus Ek Net %20 (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Karşılamalı Kampanya') {
+                                let n = row['Karşılamalı Kampanya Kalan Net (TL)'];
+                                targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                            } else if (sel === 'Hiçbiri') {
+                                let rec = row['Hangisi Daha Karlı?'];
+                                if (rec === 'Avantajlı Ürün' || rec === 'Sadece Avantajlı Var') {
+                                    let n = row['Avantajlı Ürün Kalan Net (TL)'];
+                                    targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                                } else if (rec === 'Flaş Ürün' || rec === 'Sadece Flaş Var') {
+                                    let n = row['Flaş Ürün Kalan Net (TL)'];
+                                    targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                                } else if (rec === 'Plus Ürün' || rec === 'Sadece Plus Var') {
+                                    let n = row['Plus Net (TL)'];
+                                    targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                                } else if (rec === 'Karşılamalı Kampanya') {
+                                    let n = row['Karşılamalı Kampanya Kalan Net (TL)'];
+                                    targetNet = (n && n !== '-') ? parseFloat(n) : null;
+                                }
+                            }
+
+                            if (targetNet !== null && !isNaN(targetNet) && n1 > 0) {
+                                fark = ((targetNet - n1) / n1) * 100.0;
+                            }
+
+                            if (fark === '') {
+                                let mevcut = row['Mevcut İndirim Oranı (%)'];
+                                if (mevcut !== null && mevcut !== undefined && mevcut !== '' && mevcut !== '-') {
+                                    fark = parseFloat(mevcut);
+                                }
+                            }
+
+                            if (fark !== '' && !isNaN(fark)) {
+                                row.dynamicFark = fark;
+                                let prefix = fark > 0 ? '+' : '';
+                                return prefix + fark.toFixed(2) + '%';
+                            }
+                            row.dynamicFark = -999;
+                            return '-';
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: true,
+                        render: function (data, type, row, meta) {
+                            let ekstra = getEkstraIndirim(row);
+                            if (type === 'sort' || type === 'filter') return (ekstra !== null) ? ekstra : -99999;
+                            // Sadece indirim uygulanabilir \u00fcr\u00fcnlerde g\u00f6ster
+                            if (row['\u0130ndirim Uygulanabilir'] !== 'Evet') return '-';
+                            if (ekstra === null) return '-';
+                            // Negatif ya da s\u0131f\u0131r ise g\u00f6sterme (zaten tam ya da daha fazla uygulanm\u0131\u015f)
+                            if (ekstra <= 0) return '-';
+                            return '+%' + ekstra.toFixed(2);
+                        }
+                    },
+                    {
+                        data: 'Hangisi Daha Karlı?',
+                        defaultContent: '-',
+                        className: 'highlight text-center font-semibold'
+                    },
+                    {
+                        data: null,
+                        orderable: true,
+                        render: function (data, type, row, meta) {
+                            if (type === 'sort' || type === 'filter') {
+                                return row.userSelection || 'Hiçbiri';
+                            }
+                            const av_durum = row['Avantajlı Ürün Eşleşme Durumu'];
+                            const fl_durum = row['Flaş Ürün Eşleşme Durumu'];
+                            const pl_durum = row['Plus Eşleşme Durumu'];
+                            const pl_ek_durum = row['Plus Ek İndirim Eşleşme Durumu'];
+                            const kars_durum = row['Karşılamalı Kampanya Eşleşme Durumu'];
+                            let selectHtml = `<select class="select select-bordered select-xs w-full max-w-[140px] font-semibold campaign-select" data-index="${meta.row}" onchange="updateSelection(${meta.row}, this.value)">`;
+                            selectHtml += `<option value="Hiçbiri" ${row.userSelection === 'Hiçbiri' ? 'selected' : ''}>Hiçbiri</option>`;
+                            let isNone = (row['Hangisi Daha Karlı?'] === 'Hiçbiri');
+                            if (isNone || av_durum === 'Eşleşti') {
+                                selectHtml += `<option value="Avantajlı" ${row.userSelection === 'Avantajlı' ? 'selected' : ''}>Avantajlı Ürün</option>`;
+                            }
+                            if (isNone || fl_durum === 'Eşleşti') {
+                                selectHtml += `<option value="Flaş" ${row.userSelection === 'Flaş' ? 'selected' : ''}>Flaş Ürün</option>`;
+                            }
+                            if (isNone || pl_durum === 'Eşleşti') {
+                                selectHtml += `<option value="Plus" ${row.userSelection === 'Plus' ? 'selected' : ''}>Plus Ürün</option>`;
+                            }
+                            if (isNone || pl_ek_durum === 'Eşleşti') {
+                                selectHtml += `<option value="Plus Ek İndirim %5" ${row.userSelection === 'Plus Ek İndirim %5' ? 'selected' : ''}>Plus Ek İndirim %5</option>`;
+                                selectHtml += `<option value="Plus Ek İndirim %10" ${row.userSelection === 'Plus Ek İndirim %10' ? 'selected' : ''}>Plus Ek İndirim %10</option>`;
+                                selectHtml += `<option value="Plus Ek İndirim %20" ${row.userSelection === 'Plus Ek İndirim %20' ? 'selected' : ''}>Plus Ek İndirim %20</option>`;
+                            }
+                            if (kars_durum === 'Eşleşti') {
+                                selectHtml += `<option value="Karşılamalı Kampanya" ${row.userSelection === 'Karşılamalı Kampanya' ? 'selected' : ''}>Karşılamalı Kampanya</option>`;
+                            }
+                            selectHtml += `</select>`;
+                            return selectHtml;
+                        }
+                    }
+                ],
+                initComplete: function () {
+                    let checkboxHtml = `
+                        <label class="cursor-pointer label gap-2 py-0">
+                            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary only-indirimli-filter-cb">
+                            <span class="label-text font-medium text-sm">Sadece İndirim Uygulanabilecekleri Göster</span>
+                        </label>
+                    `;
+                    $('.custom-filter-checkbox, .custom-filter-checkbox-bottom').html(checkboxHtml);
+
+                    let colVisHtml = `
+                        <div class="dropdown dropdown-end">
+                            <div tabindex="0" role="button" class="btn btn-sm btn-outline border-gray-300 bg-white hover:bg-gray-100 text-gray-700 shadow-xs font-semibold gap-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                Sütun Seçimi
+                            </div>
+                            <div tabindex="0" class="dropdown-content z-[100] menu p-3 shadow-2xl bg-white rounded-xl border border-gray-200 w-72 mt-2 space-y-1 text-xs">
+                                <div class="font-bold text-gray-800 pb-2 border-b border-gray-100 flex justify-between items-center">
+                                    <span>Görünür Sütunlar</span>
+                                    <div class="flex gap-2 text-[11px]">
+                                        <button type="button" class="text-indigo-600 hover:underline font-semibold" onclick="toggleAllColumns(true)">Tümünü Seç</button>
+                                        <span class="text-gray-300">|</span>
+                                        <button type="button" class="text-gray-500 hover:underline" onclick="toggleAllColumns(false)">Temizle</button>
+                                    </div>
+                                </div>
+                                <div class="max-h-64 overflow-y-auto space-y-1 pt-1 pr-1" id="columnToggleContainer"></div>
+                            </div>
+                        </div>
+                    `;
+                    $('.custom-col-vis').html(colVisHtml);
+                    renderColumnToggles();
+
+                    $('.only-indirimli-filter-cb').on('change', function () {
+                        let isChecked = $(this).is(':checked');
+                        $('.only-indirimli-filter-cb').prop('checked', isChecked);
+                        if (dataTable) dataTable.draw();
+                    });
+
+                    this.api().columns().every(function (index) {
+                        if (index !== 15 && index !== 16) return;
+
+                        let column = this;
+                        let headerCell = $(column.header());
+                        let colDomIdx = headerCell.index();
+                        let filterCell = $('.filters th').eq(colDomIdx);
+                        let select = $('<select class="select select-bordered select-xs w-full max-w-[120px] focus:outline-none"><option value="">Tümü</option></select>')
+                            .appendTo(filterCell)
+                            .on('change', function () {
+                                let val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                column.search(val ? '^' + val + '$' : '', true, false).draw();
+                            });
+
+                        if (index === 16) {
+                            select.append('<option value="Avantajlı">Avantajlı</option>');
+                            select.append('<option value="Flaş">Flaş</option>');
+                            select.append('<option value="Plus">Plus</option>');
+                            select.append('<option value="Plus Ek İndirim %5">Plus Ek İndirim %5</option>');
+                            select.append('<option value="Plus Ek İndirim %10">Plus Ek İndirim %10</option>');
+                            select.append('<option value="Plus Ek İndirim %20">Plus Ek İndirim %20</option>');
+                            if (tableData.some(r => r['Karşılamalı Kampanya Eşleşme Durumu'] === 'Eşleşti')) {
+                                select.append('<option value="Karşılamalı Kampanya">Karşılamalı Kampanya</option>');
+                            }
+                            select.append('<option value="Hiçbiri">Hiçbiri</option>');
+                        } else {
+                            column.data().unique().sort().each(function (d, j) {
+                                if (d !== null && d !== undefined && d !== '') {
+                                    let displayVal = d;
+                                    if (typeof d === 'object') {
+                                        displayVal = d.userSelection || 'Hiçbiri';
+                                    }
+                                    if (select.find(`option[value="${displayVal}"]`).length === 0) {
+                                        select.append('<option value="' + displayVal + '">' + displayVal + '</option>');
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        function toggleAll(source) {
+            const isChecked = source.checked;
+            tableData.forEach(row => { row.checked = isChecked; });
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+        }
+
+        function updateCheck(index, checked) {
+            tableData[index].checked = checked;
+        }
+
+        function updateSelection(index, val) {
+            tableData[index].userSelection = val;
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+        }
+
+        function autoSelect() {
+            tableData.forEach((row, index) => {
+                const recommendation = row['Hangisi Daha Karlı?'];
+                let selValue = 'Hiçbiri';
+                if (recommendation === 'Avantajlı Ürün' || recommendation === 'Sadece Avantajlı Var') {
+                    selValue = 'Avantajlı';
+                } else if (recommendation === 'Flaş Ürün' || recommendation === 'Sadece Flaş Var') {
+                    selValue = 'Flaş';
+                } else if (recommendation === 'Plus Ürün' || recommendation === 'Sadece Plus Var') {
+                    selValue = 'Plus';
+                } else if (recommendation === 'Plus Ek İndirim' || recommendation === 'Sadece Plus Ek İndirim Var') {
+                    selValue = 'Plus Ek İndirim';
+                }
+                row.userSelection = selValue;
+            });
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+            showToast("Önerilen seçimler tablodaki tüm ürünlere uygulandı.", 'success');
+        }
+
+        function saveAndCalculateKarsilamali() {
+            const fileInput = document.getElementById('karsilamaliFileInput');
+            const minSepet = document.getElementById('karsilamaliMinSepet').value;
+            const toplamIndirim = document.getElementById('karsilamaliToplamIndirim').value;
+            const trendyolOran = document.getElementById('karsilamaliTrendyolOran').value;
+
+            const formData = new FormData();
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            }
+            formData.append('min_sepet', minSepet);
+            formData.append('toplam_indirim', toplamIndirim);
+            formData.append('trendyol_oran', trendyolOran);
+
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.querySelector('#loadingOverlay h2').innerText = 'Karşılamalı kampanya konfigürasyonu kaydediliyor ve hesaplanıyor...';
+
+            fetch('/api/save_karsilamali_config', {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        fetch('/api/calculate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ karsilamali_config: data.config })
+                        })
+                            .then(res => res.json())
+                            .then(calcRes => {
+                                document.getElementById('loadingOverlay').style.display = 'none';
+                                document.querySelector('#loadingOverlay h2').innerText = 'Dosyalar oluşturuluyor, lütfen bekleyin...';
+                                if (calcRes.success) {
+                                    showToast("Karşılamalı kampanya verileri başarıyla hesaplandı.", 'success');
+                                    loadData();
+                                } else {
+                                    showToast("Hesaplama Hatası: " + calcRes.message, 'error');
+                                }
+                            });
+                    } else {
+                        document.getElementById('loadingOverlay').style.display = 'none';
+                        document.querySelector('#loadingOverlay h2').innerText = 'Dosyalar oluşturuluyor, lütfen bekleyin...';
+                        showToast("Kaydetme Hatası: " + data.message, 'error');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    document.querySelector('#loadingOverlay h2').innerText = 'Dosyalar oluşturuluyor, lütfen bekleyin...';
+                    showToast("İstek atılırken hata oluştu: " + err, 'error');
+                });
+        }
+
+        function applyBulkAction() {
+            const targetAction = document.getElementById('bulkCampaignSelect').value;
+            let appliedCount = 0;
+            let skippedBarcodes = [];
+
+            tableData.forEach((row, index) => {
+                if (row.checked) {
+                    let recommendation = row['Hangisi Daha Karlı?'];
+                    let isNone = (recommendation === 'Hiçbiri');
+                    let canApply = false;
+
+                    if (targetAction === 'Hiçbiri' || isNone) {
+                        canApply = true;
+                    } else {
+                        if (targetAction === 'Avantajlı' && row['Avantajlı Ürün Eşleşme Durumu'] === 'Eşleşti') canApply = true;
+                        if (targetAction === 'Flaş' && row['Flaş Ürün Eşleşme Durumu'] === 'Eşleşti') canApply = true;
+                        if (targetAction === 'Plus' && row['Plus Eşleşme Durumu'] === 'Eşleşti') canApply = true;
+                        if (targetAction.startsWith('Plus Ek İndirim') && row['Plus Ek İndirim Eşleşme Durumu'] === 'Eşleşti') canApply = true;
+                        if (targetAction === 'Karşılamalı Kampanya' && row['Karşılamalı Kampanya Eşleşme Durumu'] === 'Eşleşti') canApply = true;
+                    }
+
+                    if (canApply) {
+                        row.userSelection = targetAction;
+                        appliedCount++;
+                    } else {
+                        skippedBarcodes.push(row['Barkod']);
+                    }
+                }
+            });
+
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+
+            if (skippedBarcodes.length > 0) {
+                showToast(`${appliedCount} seçili ürüne '${targetAction}' uygulandı. Ancak ${skippedBarcodes.length} ürüne uygulanamadı.`, 'warning');
+            } else if (appliedCount > 0) {
+                showToast(`Toplu eylem ${appliedCount} ürüne başarıyla uygulandı.`, 'success');
+            } else {
+                showToast("Lütfen işlem yapmak için listeden en az bir ürün seçin.", 'warning');
+            }
+        }
+
+
+        function clearFilters() {
+            if (dataTable) {
+                dataTable.search('').columns().search('').draw();
+                $('.filters select').val('');
+            }
+        }
+
+        function clearSelections() {
+            tableData.forEach(row => {
+                row.userSelection = 'Hiçbiri';
+            });
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+            showToast("Tüm seçimler temizlendi.", 'success');
+        }
+
+        // --- DİNAMİK KURAL MOTORU ---
+        function addRuleRow() {
+            const container = document.getElementById('rulesContainer');
+            const rowId = 'rule_' + Date.now();
+
+            const html = `
+                <div class="flex flex-wrap items-center gap-3 p-3 bg-base-200/50 rounded-lg border border-base-200 rule-row" id="${rowId}">
+                    <select class="select select-bordered select-sm rule-type focus:outline-none" onchange="changeRuleType('${rowId}')">
+                        <option value="kiyaslama">Kampanyalar Arası Kıyaslama (Avantajlı vs Flaş)</option>
+                        <option value="guncel">Güncel Satış ile Kıyaslama (Avantajlı/Flaş vs Güncel Net)</option>
+                    </select>
+                    
+                    <div class="rule-content kiyaslama-content flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-medium">Eğer</span>
+                        <select class="select select-bordered select-sm rule-target focus:outline-none">
+                            <option value="Avantajlı">Avantajlı</option>
+                            <option value="Flaş">Flaş</option>
+                        </select>
+                        <span class="text-sm font-medium">kârı, diğerine göre</span>
+                        <select class="select select-bordered select-sm rule-operator focus:outline-none">
+                            <option value="fazla">Fazla (Min %)</option>
+                            <option value="az">Az (Max %)</option>
+                            <option value="farketmez">Fark Etmez (+-%)</option>
+                        </select>
+                        <label class="input input-bordered input-sm flex items-center gap-2 w-24">
+                            <input type="number" class="rule-percent w-full" placeholder="Örn: 5">
+                            <span class="opacity-50">%</span>
+                        </label>
+                        <span class="text-sm font-medium">ise</span>
+                        <select class="select select-bordered select-sm rule-action focus:outline-none">
+                            <option value="Avantajlı">Avantajlı Yap</option>
+                            <option value="Flaş">Flaş Yap</option>
+                            <option value="Hiçbiri">Hiçbiri Yap</option>
+                        </select>
+                    </div>
+                    
+                    <div class="rule-content guncel-content items-center gap-2 flex-wrap" style="display:none;">
+                        <span class="text-sm font-medium">Eğer</span>
+                        <select class="select select-bordered select-sm rule-target-guncel focus:outline-none">
+                            <option value="Avantajlı">Avantajlı</option>
+                            <option value="Flaş">Flaş</option>
+                        </select>
+                        <span class="text-sm font-medium">kârı, GÜNCEL NET kârdan</span>
+                        <select class="select select-bordered select-sm rule-operator-guncel focus:outline-none">
+                            <option value="fazla">Fazla (Veya Eşit) ise</option>
+                            <option value="az">Maksimum % düşüşte ise</option>
+                        </select>
+                        <label class="input input-bordered input-sm flex items-center gap-2 w-24">
+                            <input type="number" class="rule-percent-guncel w-full" placeholder="Örn: 10">
+                            <span class="opacity-50">%</span>
+                        </label>
+                        <span class="text-sm font-medium">ise seçimi</span>
+                        <select class="select select-bordered select-sm rule-action-guncel focus:outline-none">
+                            <option value="Aynı">O Kampanya (Avantajlı/Flaş) Yap</option>
+                            <option value="Hiçbiri">Hiçbiri Yap</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex-1 flex justify-end">
+                        <button class="btn btn-square btn-ghost btn-sm text-error hover:bg-error/20" onclick="document.getElementById('${rowId}').remove()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        }
+
+        function changeRuleType(rowId) {
+            const row = document.getElementById(rowId);
+            const type = row.querySelector('.rule-type').value;
+            if (type === 'kiyaslama') {
+                row.querySelector('.kiyaslama-content').style.display = 'flex';
+                row.querySelector('.guncel-content').style.display = 'none';
+            } else {
+                row.querySelector('.kiyaslama-content').style.display = 'none';
+                row.querySelector('.guncel-content').style.display = 'flex';
+            }
+        }
+
+        function applyCustomRules() {
+            const ruleRows = document.querySelectorAll('.rule-row');
+            if (ruleRows.length === 0) {
+                showToast("Lütfen önce kural ekleyin.", 'warning');
+                return;
+            }
+
+            let matchCount = 0;
+
+            tableData.forEach(row => {
+                // Sadece 'Hiçbiri' durumunda olanlara kuralları uygula
+                if (row.userSelection !== 'Hiçbiri') return;
+
+                let ruleMatched = false;
+
+                const n2 = row['Avantajlı Ürün Kalan Net (TL)'];
+                const n3 = row['Flaş Ürün Kalan Net (TL)'];
+                const f1 = row['Güncel Ürün Fiyatı (TL)'];
+
+                const hasAv = row['Avantajlı Ürün Eşleşme Durumu'] === 'Eşleşti';
+                const hasFl = row['Flaş Ürün Eşleşme Durumu'] === 'Eşleşti';
+
+                for (let i = 0; i < ruleRows.length; i++) {
+                    if (ruleMatched) break;
+
+                    const ruleNode = ruleRows[i];
+                    const type = ruleNode.querySelector('.rule-type').value;
+
+                    if (type === 'kiyaslama') {
+                        if (!hasAv || !hasFl) continue;
+                        if (n2 == null || n3 == null) continue;
+
+                        const target = ruleNode.querySelector('.rule-target').value;
+                        const op = ruleNode.querySelector('.rule-operator').value;
+                        const pctStr = ruleNode.querySelector('.rule-percent').value;
+                        const action = ruleNode.querySelector('.rule-action').value;
+
+                        if (!pctStr) continue;
+                        const pct = parseFloat(pctStr);
+
+                        const targetNet = (target === 'Avantajlı') ? n2 : n3;
+                        const otherNet = (target === 'Avantajlı') ? n3 : n2;
+
+                        let isMatch = false;
+
+                        if (otherNet > 0) {
+                            const diffPct = ((targetNet - otherNet) / otherNet) * 100;
+
+                            if (op === 'fazla' && diffPct >= pct) isMatch = true;
+                            if (op === 'az' && diffPct <= pct) isMatch = true;
+                            if (op === 'farketmez' && Math.abs(diffPct) <= pct) isMatch = true;
+                        } else if (otherNet <= 0 && targetNet > 0) {
+                            if (op === 'fazla' || op === 'farketmez') isMatch = true;
+                        }
+
+                        if (isMatch) {
+                            if (action === 'Hiçbiri' ||
+                                (action === 'Avantajlı' && hasAv) ||
+                                (action === 'Flaş' && hasFl)) {
+                                row.userSelection = action;
+                                ruleMatched = true;
+                                matchCount++;
+                            }
+                        }
+
+                    } else if (type === 'guncel') {
+                        const target = ruleNode.querySelector('.rule-target-guncel').value;
+                        const op = ruleNode.querySelector('.rule-operator-guncel').value;
+                        const pctStr = ruleNode.querySelector('.rule-percent-guncel').value;
+                        const action = ruleNode.querySelector('.rule-action-guncel').value;
+
+                        if (!pctStr) continue;
+                        const pct = parseFloat(pctStr);
+
+                        const targetNet = (target === 'Avantajlı') ? n2 : n3;
+                        const hasTarget = (target === 'Avantajlı') ? hasAv : hasFl;
+                        const n1 = row['Güncel Ürün Kalan Net (TL)'];
+
+                        if (!hasTarget || targetNet == null || n1 == null) continue;
+
+                        let isMatch = false;
+
+                        if (op === 'fazla' && targetNet >= n1) {
+                            isMatch = true;
+                        } else if (op === 'az' && n1 > 0 && targetNet < n1) {
+                            const dususPct = ((n1 - targetNet) / n1) * 100;
+                            if (dususPct <= pct) {
+                                isMatch = true;
+                            }
+                        }
+
+                        if (isMatch) {
+                            if (action === 'Hiçbiri') {
+                                row.userSelection = 'Hiçbiri';
+                                ruleMatched = true;
+                                matchCount++;
+                            } else if (action === 'Aynı') {
+                                row.userSelection = target;
+                                ruleMatched = true;
+                                matchCount++;
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (dataTable) dataTable.rows().invalidate().draw(false);
+            showToast(`Kurallar çalıştırıldı ve ${matchCount} adet ürünün seçimi güncellendi.`, 'success');
+        }
+    </script>
+</body>
+
+</html>
