@@ -21,6 +21,33 @@ import numpy as np
 import os
 import glob
 
+
+def build_discount_fields(is_eligible, current_price, dip_price, market_price):
+    def discount(upper_price, lower_price):
+        try:
+            upper = float(upper_price)
+            lower = float(lower_price)
+        except (TypeError, ValueError):
+            return None, None
+        if pd.isna(upper) or pd.isna(lower) or upper <= 0 or lower > upper:
+            return None, None
+        amount = round(upper - lower, 2)
+        return amount, round((amount / upper) * 100, 2)
+
+    available_amount, available_percent = (
+        discount(current_price, dip_price) if is_eligible else (None, None)
+    )
+    current_amount, current_percent = discount(market_price, current_price)
+
+    return {
+        'Uygulanabilecek İndirim (TL)': available_amount,
+        'Uygulanabilecek İndirim (%)': available_percent,
+        'Mevcut İndirim (TL)': current_amount,
+        'Mevcut İndirim (%)': current_percent,
+        'Düşülebilecek Dip Fiyat (TL)': float(dip_price) if is_eligible and dip_price is not None and not pd.isna(dip_price) else None,
+    }
+
+
 def calculate_all(karsilamali_config=None):
     base_dir = r'c:\Users\Tasarımcı\Desktop\trendyol'
     input_dir = os.path.join(base_dir, 'Girdiler')
@@ -229,8 +256,17 @@ def calculate_all(karsilamali_config=None):
         daha_karli_kampanya = None
         guncel_kom_orani = None
         mevcut_indirim_orani = None
+        yeni_fiyat = None
+        eski_fiyat = None
+        piyasa_fiyat = None
         
         is_indirim = tr_row is not None
+
+        if gun_row is not None:
+            try:
+                piyasa_fiyat = float(gun_row['Piyasa Satış Fiyatı (KDV Dahil)'])
+            except:
+                pass
         
         if is_indirim:
             try:
@@ -261,12 +297,8 @@ def calculate_all(karsilamali_config=None):
                 except:
                     guncel_fiyat = None
                 
-                try:
-                    piyasa_fiyat = float(gun_row['Piyasa Satış Fiyatı (KDV Dahil)'])
-                    if piyasa_fiyat > 0 and guncel_fiyat is not None and piyasa_fiyat > guncel_fiyat:
-                        mevcut_indirim_orani = round(((piyasa_fiyat - guncel_fiyat) / piyasa_fiyat) * 100.0, 2)
-                except:
-                    pass
+                if piyasa_fiyat is not None and piyasa_fiyat > 0 and guncel_fiyat is not None and piyasa_fiyat > guncel_fiyat:
+                    mevcut_indirim_orani = round(((piyasa_fiyat - guncel_fiyat) / piyasa_fiyat) * 100.0, 2)
                 
                 rate_1 = None
                 if guncel_fiyat is not None and kom_row is not None:
@@ -433,6 +465,13 @@ def calculate_all(karsilamali_config=None):
         if is_indirim and eski_fiyat is not None:
             guncel_fiyat_display = eski_fiyat
 
+        discount_fields = build_discount_fields(
+            is_indirim,
+            guncel_fiyat_display,
+            yeni_fiyat,
+            piyasa_fiyat,
+        )
+
         results.append({
             'Barkod': b,
             'Plus Ek İndirim Eşleşme Durumu': plus_ek_str,
@@ -468,7 +507,12 @@ def calculate_all(karsilamali_config=None):
             'Karşılamalı Kampanya Eşleşme Durumu': kars_str,
             'Karşılamalı Kampanya Fiyatı (TL)': kars_fiyat,
             'Karşılamalı Kampanya Komisyon (%)': rate_kars,
-            'Karşılamalı Kampanya Kalan Net (TL)': net_kars
+            'Karşılamalı Kampanya Kalan Net (TL)': net_kars,
+            'Uygulanabilecek İndirim (TL)': discount_fields['Uygulanabilecek İndirim (TL)'],
+            'Uygulanabilecek İndirim (%)': discount_fields['Uygulanabilecek İndirim (%)'],
+            'Mevcut İndirim (TL)': discount_fields['Mevcut İndirim (TL)'],
+            'Mevcut İndirim (%)': discount_fields['Mevcut İndirim (%)'],
+            'Düşülebilecek Dip Fiyat (TL)': discount_fields['Düşülebilecek Dip Fiyat (TL)']
         })
 
     res_df = pd.DataFrame(results)

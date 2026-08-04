@@ -17,6 +17,180 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 F_HESAP = os.path.join(OUTPUT_DIR, "Hesaplanmis_Komisyon_Sonuclari.xlsx")
 
+REPORT_COLUMNS = [
+    "Barkod",
+    "Güncel Fiyat (TL)",
+    "Güncel Net",
+    "Güncel Komisyon",
+    "Avantajlı Fiyat (TL)",
+    "Avantajlı Net",
+    "Flaş Fiyat (TL)",
+    "Flaş Net",
+    "Plus Fiyat (TL)",
+    "Plus Net",
+    "Plus Ek İndirim Fiyat (TL)",
+    "Plus Ek İndirim Net",
+    "Uygulanan Kampanya",
+    "Uygulanan Kampanya Fiyat",
+    "Uygulanan Kampanya Net",
+    "Uygulanan Kampanya Komisyon",
+    "Uygulanabilecek İndirim (TL)",
+    "Uygulanabilecek İndirim (%)",
+    "Mevcut İndirim (TL)",
+    "Mevcut İndirim (%)",
+    "Uygulanan İndirim (TL)",
+    "Uygulanan İndirim (%)",
+    "Ekstra Uygulanabilir İndirim (TL)",
+    "Ekstra Uygulanabilir İndirim (%)",
+    "Hangisi Karlı?",
+    "Düşülebilecek Dip Fiyat (TL)",
+]
+
+
+def as_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if pd.isna(number) else number
+
+
+def discount_between(current_price, campaign_price):
+    current = as_number(current_price)
+    campaign = as_number(campaign_price)
+    if current is None or campaign is None or current <= 0:
+        return None, None
+    amount = round(current - campaign, 2)
+    return amount, round((amount / current) * 100, 2)
+
+
+def selected_campaign_values(row):
+    selection = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
+    if selection == "Hiçbiri":
+        return (
+            as_number(row.get("Güncel Ürün Fiyatı (TL)")),
+            as_number(row.get("Güncel Ürün Kalan Net (TL)")),
+            as_number(row.get("Güncel Ürün Komisyon (%)")),
+        )
+
+    fields = {
+        "Avantajlı": (
+            "Avantajlı Ürün Fiyatı (YENİ TSF) (TL)",
+            "Avantajlı Ürün Kalan Net (TL)",
+            "Avantajlı Ürün Komisyon (%)",
+        ),
+        "Flaş": (
+            "Flaş Ürün 24 Saat Fiyatı (TL)",
+            "Flaş Ürün Kalan Net (TL)",
+            "Flaş Ürün Komisyon (%)",
+        ),
+        "Plus": ("Plus Fiyatı (TL)", "Plus Net (TL)", "Plus Komisyon (%)"),
+        "Plus Ek İndirim %5": (
+            "Plus Ek Fiyatı %5 (TL)",
+            "Plus Ek Net %5 (TL)",
+            "Plus Ek Komisyon (%)",
+        ),
+        "Plus Ek İndirim %10": (
+            "Plus Ek Fiyatı %10 (TL)",
+            "Plus Ek Net %10 (TL)",
+            "Plus Ek Komisyon (%)",
+        ),
+        "Plus Ek İndirim %20": (
+            "Plus Ek Fiyatı %20 (TL)",
+            "Plus Ek Net %20 (TL)",
+            "Plus Ek Komisyon (%)",
+        ),
+        "Karşılamalı Kampanya": (
+            "Karşılamalı Kampanya Fiyatı (TL)",
+            "Karşılamalı Kampanya Kalan Net (TL)",
+            "Karşılamalı Kampanya Komisyon (%)",
+        ),
+    }
+    selected = fields.get(selection)
+    if selected is None:
+        return None, None, None
+    price_field, net_field, commission_field = selected
+    return (
+        as_number(row.get(price_field)),
+        as_number(row.get(net_field)),
+        as_number(row.get(commission_field)),
+    )
+
+
+def build_report_row(row):
+    selection = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
+    is_discount_eligible = row.get("İndirim Uygulanabilir") == "Evet"
+    current_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
+    campaign_price, campaign_net, campaign_commission = selected_campaign_values(row)
+    applied_amount, applied_percent = (
+        discount_between(current_price, campaign_price)
+        if selection != "Hiçbiri"
+        else (None, None)
+    )
+
+    available_amount = as_number(row.get("Uygulanabilecek İndirim (TL)")) if is_discount_eligible else None
+    available_percent = as_number(row.get("Uygulanabilecek İndirim (%)")) if is_discount_eligible else None
+    extra_amount = None
+    extra_percent = None
+    if available_amount is not None:
+        remaining = round(available_amount - (applied_amount or 0), 2)
+        extra_amount = remaining if remaining > 0 else None
+    if available_percent is not None:
+        remaining = round(available_percent - (applied_percent or 0), 2)
+        extra_percent = remaining if remaining > 0 else None
+
+    plus_extra_price = None
+    plus_extra_net = None
+    if selection.startswith("Plus Ek İndirim %"):
+        rate = selection.rsplit("%", 1)[-1]
+        plus_extra_price = as_number(row.get(f"Plus Ek Fiyatı %{rate} (TL)"))
+        plus_extra_net = as_number(row.get(f"Plus Ek Net %{rate} (TL)"))
+
+    return {
+        "Barkod": row.get("Barkod"),
+        "Güncel Fiyat (TL)": current_price,
+        "Güncel Net": as_number(row.get("Güncel Ürün Kalan Net (TL)")),
+        "Güncel Komisyon": as_number(row.get("Güncel Ürün Komisyon (%)")),
+        "Avantajlı Fiyat (TL)": as_number(row.get("Avantajlı Ürün Fiyatı (YENİ TSF) (TL)")),
+        "Avantajlı Net": as_number(row.get("Avantajlı Ürün Kalan Net (TL)")),
+        "Flaş Fiyat (TL)": as_number(row.get("Flaş Ürün 24 Saat Fiyatı (TL)")),
+        "Flaş Net": as_number(row.get("Flaş Ürün Kalan Net (TL)")),
+        "Plus Fiyat (TL)": as_number(row.get("Plus Fiyatı (TL)")),
+        "Plus Net": as_number(row.get("Plus Net (TL)")),
+        "Plus Ek İndirim Fiyat (TL)": plus_extra_price,
+        "Plus Ek İndirim Net": plus_extra_net,
+        "Uygulanan Kampanya": selection,
+        "Uygulanan Kampanya Fiyat": campaign_price,
+        "Uygulanan Kampanya Net": campaign_net,
+        "Uygulanan Kampanya Komisyon": campaign_commission,
+        "Uygulanabilecek İndirim (TL)": available_amount,
+        "Uygulanabilecek İndirim (%)": available_percent,
+        "Mevcut İndirim (TL)": as_number(row.get("Mevcut İndirim (TL)")),
+        "Mevcut İndirim (%)": as_number(row.get("Mevcut İndirim (%)")),
+        "Uygulanan İndirim (TL)": applied_amount,
+        "Uygulanan İndirim (%)": applied_percent,
+        "Ekstra Uygulanabilir İndirim (TL)": extra_amount,
+        "Ekstra Uygulanabilir İndirim (%)": extra_percent,
+        "Hangisi Karlı?": row.get("Hangisi Daha Karlı?"),
+        "Düşülebilecek Dip Fiyat (TL)": as_number(row.get("Düşülebilecek Dip Fiyat (TL)")) if is_discount_eligible else None,
+    }
+
+
+def normalize_visible_columns(requested):
+    if requested is None:
+        return REPORT_COLUMNS.copy()
+    if not isinstance(requested, list):
+        return REPORT_COLUMNS.copy()
+    requested_set = {column for column in requested if isinstance(column, str)}
+    return [column for column in REPORT_COLUMNS if column in requested_set]
+
+
+def build_report_dataframe(table_data, requested_columns):
+    rows = [build_report_row(row) for row in table_data if row.get("Barkod")]
+    columns = normalize_visible_columns(requested_columns)
+    return pd.DataFrame(rows, columns=REPORT_COLUMNS)[columns]
+
+
 @app.route("/api/download/<folder>/<filename>")
 def download_file(folder, filename):
     folder_dir = os.path.join(OUTPUT_DIR, folder)
@@ -175,6 +349,7 @@ def calculate():
 def apply_campaign():
     data = request.get_json(silent=True) or {}
     selections = data.get("selections", {})
+    visible_columns = data.get("visibleColumns")
     table_data = data.get("tableData", [])
     if not table_data and os.path.exists(F_HESAP):
         try:
@@ -488,103 +663,8 @@ def apply_campaign():
             fix_xlsx_for_trendyol(out_report)
             generated_files.append(os.path.join(timestamp_folder, "Kampanya_Genel_Raporu.xlsx"))
             
-            # 3. Özet Rapor
-            summary_rows = []
-            for row in table_data:
-                barkod = row.get('Barkod')
-                if not barkod: continue
-                
-                guncel_fiyat = row.get('Güncel Ürün Fiyatı (TL)')
-                guncel_komisyon = row.get('Güncel Ürün Komisyon (%)')
-                guncel_net = row.get('Güncel Ürün Kalan Net (TL)')
-                
-                user_sel = row.get('userSelection', 'Hiçbiri')
-                
-                uygulanan_fiyat = None
-                uygulanan_komisyon = None
-                uygulanan_net = None
-                
-                if user_sel == 'Avantajlı':
-                    uygulanan_fiyat = row.get('Avantajlı Ürün Fiyatı (YENİ TSF) (TL)')
-                    uygulanan_komisyon = row.get('Avantajlı Ürün Komisyon (%)')
-                    uygulanan_net = row.get('Avantajlı Ürün Kalan Net (TL)')
-                elif user_sel == 'Flaş':
-                    uygulanan_fiyat = row.get('Flaş Ürün 24 Saat Fiyatı (TL)')
-                    uygulanan_komisyon = row.get('Flaş Ürün Komisyon (%)')
-                    uygulanan_net = row.get('Flaş Ürün Kalan Net (TL)')
-                elif user_sel == 'Plus':
-                    uygulanan_fiyat = row.get('Plus Fiyatı (TL)')
-                    uygulanan_komisyon = row.get('Plus Komisyon (%)')
-                    uygulanan_net = row.get('Plus Net (TL)')
-                elif user_sel == 'Plus Ek İndirim %5':
-                    uygulanan_fiyat = row.get('Plus Ek Fiyatı %5 (TL)')
-                    uygulanan_komisyon = row.get('Plus Ek Komisyon (%)')
-                    uygulanan_net = row.get('Plus Ek Net %5 (TL)')
-                elif user_sel == 'Plus Ek İndirim %10':
-                    uygulanan_fiyat = row.get('Plus Ek Fiyatı %10 (TL)')
-                    uygulanan_komisyon = row.get('Plus Ek Komisyon (%)')
-                    uygulanan_net = row.get('Plus Ek Net %10 (TL)')
-                elif user_sel == 'Plus Ek İndirim %20':
-                    uygulanan_fiyat = row.get('Plus Ek Fiyatı %20 (TL)')
-                    uygulanan_komisyon = row.get('Plus Ek Komisyon (%)')
-                    uygulanan_net = row.get('Plus Ek Net %20 (TL)')
-                elif user_sel == 'Karşılamalı Kampanya':
-                    uygulanan_fiyat = row.get('Karşılamalı Kampanya Fiyatı (TL)')
-                    uygulanan_komisyon = row.get('Karşılamalı Kampanya Komisyon (%)')
-                    uygulanan_net = row.get('Karşılamalı Kampanya Kalan Net (TL)')
-                else: # Hiçbiri
-                    uygulanan_fiyat = guncel_fiyat
-                    uygulanan_komisyon = guncel_komisyon
-                    uygulanan_net = guncel_net
-                    
-                # Sadece indirim uygulanabilir ürünlerde (is_indirim=True) değer göster
-                is_indirim = row.get('İndirim Uygulanabilir') == 'Evet'
-                
-                toplam_indirim = row.get('Mevcut İndirim Oranı (%)')
-                toplam_indirim_val = None
-                toplam_indirim_str = '-'
-                if is_indirim and toplam_indirim is not None and str(toplam_indirim).strip() not in ['', '-', 'None']:
-                    try:
-                        v = float(toplam_indirim)
-                        if not pd.isna(v) and v > 0:
-                            toplam_indirim_val = v
-                            toplam_indirim_str = f"%{v:.2f}"
-                    except:
-                        pass
-
-                guncel_fiyat_val = float(guncel_fiyat) if (guncel_fiyat and str(guncel_fiyat) != '-') else 0.0
-                uygulanan_fiyat_val = float(uygulanan_fiyat) if (uygulanan_fiyat and str(uygulanan_fiyat) != '-') else 0.0
-
-                uygulanan_indirim_val = None
-                uygulanan_indirim_str = '-'
-                if guncel_fiyat_val > 0 and user_sel != 'Hiçbiri' and uygulanan_fiyat_val > 0:
-                    uygulanan_indirim_val = ((guncel_fiyat_val - uygulanan_fiyat_val) / guncel_fiyat_val) * 100.0
-                    uygulanan_indirim_str = f"%{uygulanan_indirim_val:.2f}"
-
-                ekstra_indirim_str = '-'
-                if is_indirim and toplam_indirim_val is not None:
-                    # Kampanya seçilmemişse tüm kalan indirim potansiyeli gösterilir
-                    current_applied = uygulanan_indirim_val if (uygulanan_indirim_val is not None) else 0.0
-                    rem_diff = round(toplam_indirim_val - current_applied, 2)
-                    # Sadece pozitif fark varsa göster (negatif = zaten fazla uygulanmış)
-                    if rem_diff > 0:
-                        ekstra_indirim_str = f"+%{rem_diff:.2f}"
-
-                summary_rows.append({
-                    'Barkod': barkod,
-                    'Güncel Fiyat': guncel_fiyat,
-                    'Güncel Komisyon': guncel_komisyon,
-                    'Güncel Net': guncel_net,
-                    'Uygulanan Kampanya': user_sel,
-                    'Uygulanan Fiyat': uygulanan_fiyat,
-                    'Uygulanan Komisyon': uygulanan_komisyon,
-                    'Uygulanan Net': uygulanan_net,
-                    'Toplam Uygulanabilecek İndirim (%)': toplam_indirim_str,
-                    'Uygulanan İndirim (%)': uygulanan_indirim_str,
-                    'Ekstra Uygulanabilir İndirim (%)': ekstra_indirim_str
-                })
-
-            df_summary = pd.DataFrame(summary_rows)
+            # 3. Sayfada seçilen sütunlarla aynı sıradaki özet rapor
+            df_summary = build_report_dataframe(table_data, visible_columns)
             out_summary = os.path.join(run_output_dir, "Kampanya_Ozet_Raporu.xlsx")
             df_summary.to_excel(out_summary, index=False)
             fix_xlsx_for_trendyol(out_summary)
