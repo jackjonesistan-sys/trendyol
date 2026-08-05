@@ -1,0 +1,50 @@
+{
+  "files": {
+    "discount": {
+      "stored_name": "discount.xlsx",
+      "original_name": "İndirim Uygulanabilecek Ürünler.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "commission": {
+      "stored_name": "commission.xlsx",
+      "original_name": "urunkomisyontarifeleri275961-03-08-2026-12-15-53.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "current": {
+      "stored_name": "current.xlsx",
+      "original_name": "GüncelÜrünleriniz_03.08.2026-14.40.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "advantage": {
+      "stored_name": "advantage.xlsx",
+      "original_name": "Avantajlı Ürünler.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "flash": {
+      "stored_name": "flash.xlsx",
+      "original_name": "flasurunler275961-03-08-2026-13-46-50.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "plus": {
+      "stored_name": "plus.xlsx",
+      "original_name": "Plus Komisyon Tarifeleri.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "muhasebe_avantaj": {
+      "stored_name": "muhasebe_avantaj.xlsx",
+      "original_name": "avantaj.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "muhasebe_flas": {
+      "stored_name": "muhasebe_flas.xlsx",
+      "original_name": "flaş.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    },
+    "muhasebe_plus": {
+      "stored_name": "muhasebe_plus.xlsx",
+      "original_name": "plus.xlsx",
+      "uploaded_at": "2026-08-06T02:02:17+03:00"
+    }
+  },
+  "counter_configs": []
+}

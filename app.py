@@ -1,3 +1,4 @@
+import ast
 import os
 import json
 import math
@@ -62,16 +63,6 @@ CAMPAIGN_LABELS = {
     "Flaş": "Flaş Ürün",
     "Plus": "Plus Ürün",
 }
-VALID_SELECTIONS = {
-    "Hiçbiri",
-    "Avantajlı",
-    "Flaş",
-    "Plus",
-    "Plus Ek İndirim %5",
-    "Plus Ek İndirim %10",
-    "Plus Ek İndirim %20",
-    "Karşılamalı Kampanya",
-}
 VALID_TARGET_TYPES = {
     "Hepsi",
     "Avantajlı",
@@ -88,6 +79,37 @@ def as_number(value):
     except (TypeError, ValueError):
         return None
     return None if pd.isna(number) else number
+
+
+def parse_persisted_collection(value, expected_type):
+    if isinstance(value, expected_type):
+        return value
+    if isinstance(value, str):
+        try:
+            value = ast.literal_eval(value)
+        except (SyntaxError, ValueError):
+            pass
+    return value if isinstance(value, expected_type) else expected_type()
+
+
+def restore_persisted_collections(frame):
+    return frame.assign(**{
+        column: frame[column].map(
+            lambda value, kind=expected_type: parse_persisted_collection(value, kind)
+        )
+        for column, expected_type in (
+            ("eligible_campaigns", list),
+            ("counter_evaluations", dict),
+        )
+        if column in frame.columns
+    })
+
+
+def selection_payload_is_valid(selections):
+    return isinstance(selections, dict) and all(
+        isinstance(barcode, str) and isinstance(selection, str)
+        for barcode, selection in selections.items()
+    )
 
 
 def round2(value):
@@ -118,10 +140,8 @@ def selected_campaign_values(row):
         )
     if selection.startswith("Plus Ek İndirim %"):
         rate = int(selection.rsplit("%", 1)[-1])
-        base_price = as_number(row.get(f"Plus Ek Fiyatı %{rate} (TL)"))
-        campaign_price = discounted_price(base_price, rate)
         return (
-            campaign_price,
+            as_number(row.get(f"Plus Ek Fiyatı %{rate} (TL)")),
             as_number(row.get(f"Plus Ek Net %{rate} (TL)")),
             as_number(row.get("Plus Ek Komisyon (%)")),
         )
@@ -188,8 +208,7 @@ def build_report_row(row):
 
     if selection.startswith("Plus Ek İndirim %"):
         plus_rate = int(selection.rsplit("%", 1)[-1])
-        plus_base_price = as_number(row.get(f"Plus Ek Fiyatı %{plus_rate} (TL)"))
-        plus_extra_price = discounted_price(plus_base_price, plus_rate)
+        plus_extra_price = as_number(row.get(f"Plus Ek Fiyatı %{plus_rate} (TL)"))
         plus_extra_net = as_number(row.get(f"Plus Ek Net %{plus_rate} (TL)"))
     else:
         plus_extra_price = None
@@ -370,7 +389,7 @@ def get_data():
     if not calculation_result_is_current():
         return jsonify({"needs_calculation": True, "message": "Lütfen önce 'Verileri Güncelle' butonuna basarak hesaplamaları başlatın."}), 200
         
-    df = pd.read_excel(F_HESAP)
+    df = restore_persisted_collections(pd.read_excel(F_HESAP))
     return app.response_class(
         response=df.to_json(orient="records"),
         status=200,
@@ -439,10 +458,7 @@ def calculate():
         result = calculate_all(input_files, counter_files=counter_files, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR)
         if result.get("success"):
             result["uploads"] = load_upload_status(UPLOAD_DIR, INPUT_MANIFEST)
-            # F_HESAP kaydı
-            try:
-                pd.DataFrame(result["results"]).to_excel(F_HESAP, index=False)
-            except Exception: pass
+            pd.DataFrame(result["results"]).to_excel(F_HESAP, index=False)
         return jsonify(result), (200 if result.get("success") else 500)
     except InputValidationError as e:
         return jsonify({"success": False, "message": str(e)}), 400
@@ -457,10 +473,7 @@ def calculate():
 def apply_campaign():
     data = request.get_json(silent=True) or {}
     selections = data.get("selections", {})
-    if not isinstance(selections, dict) or any(
-        not isinstance(value, str) or value not in VALID_SELECTIONS
-        for value in selections.values()
-    ):
+    if not selection_payload_is_valid(selections):
         return jsonify({"success": False, "message": "Kampanya seçimleri geçersiz."}), 400
     visible_columns = data.get("visibleColumns")
     target_type = data.get("target_type", "Hepsi")
@@ -477,7 +490,9 @@ def apply_campaign():
             "message": "Önce yüklenen girdilerle hesaplama yapın.",
         }), 400
     try:
-        raw_rows = pd.read_excel(F_HESAP).to_dict(orient="records")
+        raw_rows = restore_persisted_collections(
+            pd.read_excel(F_HESAP)
+        ).to_dict(orient="records")
     except Exception:
         app.logger.exception("Hesap sonucu okunamadı")
         return jsonify({
@@ -574,10 +589,11 @@ def apply_campaign():
             ws_fl = wb_fl.active
             header_fl = [ws_fl.cell(1, c).value for c in range(1, ws_fl.max_column + 1)]
             b_idx_fl = header_fl.index('Barkod') + 1 if 'Barkod' in header_fl else None
+            fiyat_24_idx = header_fl.index('24 Saat Fiyat') + 1 if '24 Saat Fiyat' in header_fl else None
             guncel_fiyat_idx = header_fl.index('Güncellenecek Fiyat') + 1 if 'Güncellenecek Fiyat' in header_fl else None
             baslangic_idx = header_fl.index('24 Saat Flaş Başlangıç Tarihi') + 1 if '24 Saat Flaş Başlangıç Tarihi' in header_fl else None
         
-            if b_idx_fl and guncel_fiyat_idx and baslangic_idx:
+            if b_idx_fl and fiyat_24_idx and guncel_fiyat_idx and baslangic_idx:
                 date_groups = {} # {date_str: [row_indices]}
 
                 for r in range(2, ws_fl.max_row + 1):
@@ -602,6 +618,10 @@ def apply_campaign():
                         wb_copy = openpyxl.load_workbook(F_FLAS)
                         ws_copy = wb_copy.active
                         for r in keep_rows:
+                            barcode = str(ws_copy.cell(r, b_idx_fl).value or '').strip()
+                            selected_price = row_by_barcode.get(barcode, {}).get('Flaş Ürün 24 Saat Fiyatı (TL)')
+                            if selected_price is not None and not pd.isna(selected_price):
+                                ws_copy.cell(r, fiyat_24_idx).value = float(selected_price)
                             ws_copy.cell(r, guncel_fiyat_idx).value = "24 Saat"
                         safe_keep_rows(ws_copy, keep_rows)
                         out_name = os.path.join(run_output_dir, f"Flas_Urun_{date_key}.xlsx")
@@ -641,11 +661,13 @@ def apply_campaign():
                         if not b_val: continue
                         b_val_str = str(b_val).strip()
                         sel = selections.get(b_val_str, "Hiçbiri")
+                        row_info = row_by_barcode.get(b_val_str, {})
                         should_keep = sel == "Plus"
 
                         if should_keep:
                             ust_lim = ws_plus.cell(r, ust_limit_idx).value
-                            ws_plus.cell(r, fiyat_secim_idx).value = ust_lim
+                            selected_price = row_info.get('Plus Fiyatı (TL)')
+                            ws_plus.cell(r, fiyat_secim_idx).value = selected_price if selected_price is not None and not pd.isna(selected_price) else ust_lim
                             ws_plus.cell(r, tarife_secim_idx).value = f"{gun_sayisi} Günlük Fiyat"
                             keep_rows.append(r)
                 
@@ -683,11 +705,14 @@ def apply_campaign():
                             should_keep = sel == target_sel
 
                             if should_keep:
-                                campaign_price = discounted_price(
-                                    ws_pe.cell(r, max_fiyat_idx_pe).value, rate
-                                )
+                                row_info = row_by_barcode.get(b_val_str, {})
+                                campaign_price = row_info.get(f'Plus Ek Fiyatı %{rate} (TL)')
+                                if campaign_price is None or pd.isna(campaign_price):
+                                    campaign_price = discounted_price(
+                                        ws_pe.cell(r, max_fiyat_idx_pe).value, rate
+                                    )
                                 if campaign_price is not None:
-                                    ws_pe.cell(r, fiyat_idx_pe).value = campaign_price
+                                    ws_pe.cell(r, fiyat_idx_pe).value = float(campaign_price)
                                 keep_rows.append(r)
 
                         if keep_rows:
@@ -729,8 +754,11 @@ def apply_campaign():
 
                             if should_keep:
                                 max_fiyat_val = ws_kars.cell(r, max_fiyat_idx_kars).value
-                                if max_fiyat_val:
-                                    ws_kars.cell(r, fiyat_idx_kars).value = max_fiyat_val
+                                row_info = row_by_barcode.get(b_val_str, {})
+                                evaluation = row_info.get('counter_evaluations', {}).get(c_label, {})
+                                campaign_price = evaluation.get('price') or max_fiyat_val
+                                if campaign_price:
+                                    ws_kars.cell(r, fiyat_idx_kars).value = float(campaign_price)
                                 keep_rows.append(r)
                                 
                         if keep_rows:

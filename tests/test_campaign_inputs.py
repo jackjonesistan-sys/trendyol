@@ -23,6 +23,13 @@ def write_xlsx(path, columns, row=None):
 
 
 class CampaignInputTests(unittest.TestCase):
+    def test_non_finite_values_are_not_valid_numbers(self):
+        from komisyon_hesaplayici import to_float
+
+        for value in ("nan", float("nan"), "inf", float("inf"), "-inf"):
+            with self.subTest(value=value):
+                self.assertIsNone(to_float(value))
+
     def test_current_products_are_validated_by_columns_not_filename(self):
         from input_files import validate_workbook
 
@@ -135,9 +142,32 @@ class CampaignInputTests(unittest.TestCase):
             "Avantajlı, Flaş, Plus, Plus Ek İndirim, Karşılamalı Kampanya",
         )
 
+        initial, recommended, applicable = choose_campaigns_smart(110, candidates)
+
+        self.assertEqual((initial, recommended), ("Flaş", "Flaş Ürün"))
+        self.assertIn("Avantajlı", applicable)
+
+        initial, recommended, applicable = choose_campaigns_smart(
+            110,
+            [("Plus", 105, 100, 5, True)],
+        )
+        self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))
+
+        initial, recommended, applicable = choose_campaigns_smart(
+            110,
+            [("Plus", 115, 100, 5, True)],
+        )
+        self.assertEqual((initial, recommended, applicable), ("Plus", "Plus Ürün", "Plus"))
+
+        initial, recommended, applicable = choose_campaigns_smart(
+            None,
+            [("Plus", 115, 100, 5, True)],
+        )
+        self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))
+
 
 class CalculatorInputTests(unittest.TestCase):
-    def test_calculation_succeeds_with_required_inputs_only(self):
+    def test_calculation_succeeds_with_required_inputs_and_plus_extra(self):
         from komisyon_hesaplayici import calculate_all
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -189,6 +219,159 @@ class CalculatorInputTests(unittest.TestCase):
             report = pd.read_excel(output / "Kampanya_Hesaplama_Sonuclari.xlsx")
             self.assertEqual(report.loc[0, "İlk Kampanya Seçimi"], "Hiçbiri")
             self.assertTrue(pd.isna(report.loc[0, "Uygulanabilir Kampanyalar"]))
+
+            plus_extra = root / "plus-extra.xlsx"
+            pd.DataFrame(
+                [{
+                    "Barkod": "A1",
+                    "Maksimum Girebileceğin Fiyat": 100,
+                    "Kampanyalı Satış Fiyatı": None,
+                }]
+            ).to_excel(plus_extra, index=False)
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "plus_extra": plus_extra,
+                },
+                output_dir=output,
+            )
+
+            row = result["results"][0]
+            self.assertIn("Plus Ek İndirim", row["Uygulanabilir Kampanyalar"])
+            self.assertIn("Plus Ek İndirim %5", row["eligible_campaigns"])
+
+            counter = root / "counter.xlsx"
+            pd.DataFrame(
+                [{
+                    "Barkod": "A1",
+                    "Maksimum Girebileceğin Fiyat": 95,
+                    "Kampanyalı Satış Fiyatı": None,
+                }]
+            ).to_excel(counter, index=False)
+            result = calculate_all(
+                {"discount": discount, "commission": commission, "current": current},
+                counter_files=[{
+                    "path": counter,
+                    "label": "Karşılamalı Test",
+                    "min_price": 0,
+                    "discount_amount": 10,
+                    "trendyol_percent": 50,
+                }],
+                output_dir=output,
+            )
+
+            evaluation = result["results"][0]["counter_evaluations"]["Karşılamalı Test"]
+            self.assertEqual(set(evaluation), {"price", "rate", "net", "seller_disc"})
+
+    def test_missing_campaign_price_uses_current_price_only_when_net_improves(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            plus = root / "plus.xlsx"
+
+            pd.DataFrame([
+                {"BARKOD": "A1", "Eski Fiyat": None, "YENİ Fiyat": None, "Durum": "Yok"},
+                {"BARKOD": "A2", "Eski Fiyat": None, "YENİ Fiyat": None, "Durum": "Yok"},
+                {"BARKOD": "A3", "Eski Fiyat": None, "YENİ Fiyat": None, "Durum": "Yok"},
+            ]).to_excel(discount, index=False)
+            pd.DataFrame([
+                {
+                    "BARKOD": barcode,
+                    "1.Fiyat Alt Limit": 0,
+                    "2.Fiyat Üst Limiti": None,
+                    "2.Fiyat Alt Limit": None,
+                    "3.Fiyat Üst Limiti": None,
+                    "3.Fiyat Alt Limit": None,
+                    "4.Fiyat Üst Limiti": None,
+                    "1.KOMİSYON": 20,
+                    "2.KOMİSYON": 20,
+                    "3.KOMİSYON": 20,
+                    "4.KOMİSYON": 20,
+                }
+                for barcode in ("A1", "A2", "A3")
+            ]).to_excel(commission, index=False)
+            pd.DataFrame([
+                {
+                    "Barkod": barcode,
+                    "Komisyon Oranı": 20,
+                    "Piyasa Satış Fiyatı (KDV Dahil)": 100,
+                    "Trendyol'da Satılacak Fiyat (KDV Dahil)": 100,
+                }
+                for barcode in ("A1", "A2", "A3")
+            ]).to_excel(current, index=False)
+            pd.DataFrame([
+                {
+                    "Barkod": "A1",
+                    "Plus Fiyat Üst Limiti": None,
+                    "Plus Komisyon Teklifi": 10,
+                    "Plus Fiyat Seçimi": None,
+                    "Tarife Seçimi": None,
+                },
+                {
+                    "Barkod": "A2",
+                    "Plus Fiyat Üst Limiti": None,
+                    "Plus Komisyon Teklifi": 20,
+                    "Plus Fiyat Seçimi": None,
+                    "Tarife Seçimi": None,
+                },
+                {
+                    "Barkod": "A3",
+                    "Plus Fiyat Üst Limiti": None,
+                    "Plus Komisyon Teklifi": "-inf",
+                    "Plus Fiyat Seçimi": None,
+                    "Tarife Seçimi": None,
+                },
+            ]).to_excel(plus, index=False)
+
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "plus": plus,
+                },
+                output_dir=root / "output",
+            )
+            rows = {row["Barkod"]: row for row in result["results"]}
+
+            self.assertEqual(rows["A1"]["Plus Fiyatı (TL)"], 100)
+            self.assertEqual(rows["A1"]["İlk Kampanya Seçimi"], "Plus")
+            self.assertIn("Plus", rows["A1"]["eligible_campaigns"])
+            self.assertEqual(rows["A2"]["İlk Kampanya Seçimi"], "Hiçbiri")
+            self.assertEqual(rows["A2"]["eligible_campaigns"], ["Hiçbiri"])
+            self.assertEqual(rows["A3"]["İlk Kampanya Seçimi"], "Hiçbiri")
+            self.assertEqual(rows["A3"]["eligible_campaigns"], ["Hiçbiri"])
+
+            plus_extra = root / "plus-extra.xlsx"
+            pd.DataFrame([
+                {"BARKOD": "A1", "Eski Fiyat": 100, "YENİ Fiyat": 90, "Durum": "İndirim"},
+            ]).to_excel(discount, index=False)
+            pd.DataFrame([
+                {
+                    "Barkod": "A1",
+                    "Maksimum Girebileceğin Fiyat": 90,
+                    "Kampanyalı Satış Fiyatı": None,
+                },
+            ]).to_excel(plus_extra, index=False)
+
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "plus_extra": plus_extra,
+                },
+                output_dir=root / "output-plus-extra",
+            )
+            row = result["results"][0]
+            self.assertEqual(row["İlk Kampanya Seçimi"], "Hiçbiri")
+            self.assertEqual(row["eligible_campaigns"], ["Hiçbiri"])
 
 
 if __name__ == "__main__":

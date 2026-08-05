@@ -401,11 +401,12 @@
     <!-- jQuery and DataTables JS -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script id="report-columns-data" type="application/json">{{ report_columns | tojson }}</script>
 
     <script>
         let tableData = [];
         let dataTable = null;
-        const reportColumns = {{ report_columns | tojson }};
+        const reportColumns = JSON.parse(document.getElementById('report-columns-data').textContent);
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
@@ -438,6 +439,7 @@
         var CAMPAIGN_LABELS = window.CAMPAIGN_LABELS;
 
         function asNumber(value) {
+            if (value === null || value === undefined || value === '') return null;
             const number = Number(value);
             return Number.isFinite(number) ? number : null;
         }
@@ -465,13 +467,14 @@
             };
             if (selection.startsWith('Plus Ek İndirim %')) {
                 const rate = Number(selection.split('%').pop());
-                const basePrice = asNumber(row[`Plus Ek Fiyatı %${rate} (TL)`]);
                 return [
-                    basePrice === null ? null : round2(basePrice * (1 - rate / 100)),
+                    asNumber(row[`Plus Ek Fiyatı %${rate} (TL)`]),
                     asNumber(row[`Plus Ek Net %${rate} (TL)`]),
                     asNumber(row['Plus Ek Komisyon (%)'])
                 ];
             }
+            const counter = row.counter_evaluations?.[selection];
+            if (counter) return [counter.price, counter.net, counter.rate].map(asNumber);
             const selected = fields[selection];
             return selected ? selected.map(field => asNumber(row[field])) : [null, null, null];
         }
@@ -495,10 +498,7 @@
             const plusRate = selection.startsWith('Plus Ek İndirim %')
                 ? Number(selection.split('%').pop())
                 : 5;
-            const plusBasePrice = asNumber(row[`Plus Ek Fiyatı %${plusRate} (TL)`]);
-            const plusExtraPrice = plusBasePrice === null
-                ? null
-                : round2(plusBasePrice * (1 - plusRate / 100));
+            const plusExtraPrice = asNumber(row[`Plus Ek Fiyatı %${plusRate} (TL)`]);
             const campaignLabels = {
                 'Avantajlı': 'Avantajlı Ürün',
                 'Flaş': 'Flaş Ürün',
@@ -1027,11 +1027,6 @@
             tableData[index].checked = checked;
         }
 
-        function updateSelection(index, val) {
-            tableData[index].userSelection = val;
-            if (dataTable) dataTable.rows().invalidate().draw(false);
-        }
-
         function autoSelect() {
             let selectedCount = 0;
             tableData.forEach(row => {
@@ -1041,46 +1036,6 @@
             if (dataTable) dataTable.rows().invalidate().draw(false);
             showToast(`${selectedCount} ürüne en yüksek netli kampanya seçimi uygulandı.`, selectedCount ? 'success' : 'warning');
         }
-
-        function applyBulkAction() {
-            const targetAction = document.getElementById('bulkCampaignSelect').value;
-            let appliedCount = 0;
-            let skippedBarcodes = [];
-
-            tableData.forEach((row, index) => {
-                if (row.checked) {
-                    let canApply = false;
-
-                    if (targetAction === 'Hiçbiri') {
-                        canApply = true;
-                    } else {
-                        const applicable = new Set(String(row['Uygulanabilir Kampanyalar'] || '').split(', '));
-                        const targetGroup = targetAction.startsWith('Plus Ek İndirim')
-                            ? 'Plus Ek İndirim'
-                            : targetAction;
-                        canApply = applicable.has(targetGroup);
-                    }
-
-                    if (canApply) {
-                        row.userSelection = targetAction;
-                        appliedCount++;
-                    } else {
-                        skippedBarcodes.push(row['Barkod']);
-                    }
-                }
-            });
-
-            if (dataTable) dataTable.rows().invalidate().draw(false);
-
-            if (skippedBarcodes.length > 0) {
-                showToast(`${appliedCount} seçili ürüne '${targetAction}' uygulandı. Ancak ${skippedBarcodes.length} ürüne uygulanamadı.`, 'warning');
-            } else if (appliedCount > 0) {
-                showToast(`Toplu eylem ${appliedCount} ürüne başarıyla uygulandı.`, 'success');
-            } else {
-                showToast("Lütfen işlem yapmak için listeden en az bir ürün seçin.", 'warning');
-            }
-        }
-
 
         function clearFilters() {
             if (dataTable) {

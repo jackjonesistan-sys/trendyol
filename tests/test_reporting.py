@@ -93,7 +93,7 @@ class ReportingTests(unittest.TestCase):
                 "Güncel Ürün Fiyatı (TL)": 100,
                 "Güncel Ürün Kalan Net (TL)": 90,
                 "Güncel Ürün Komisyon (%)": 10,
-                "Plus Ek Fiyatı %10 (TL)": 100,
+                "Plus Ek Fiyatı %10 (TL)": 90,
                 "Plus Ek Net %10 (TL)": 80,
                 "Plus Ek Komisyon (%)": 10,
             }
@@ -119,6 +119,27 @@ class ReportingTests(unittest.TestCase):
         self.assertFalse(
             app.campaign_selection_is_applicable("Flaş", "Avantajlı, Plus")
         )
+
+    def test_excel_persisted_campaign_collections_restore_their_types(self):
+        self.assertEqual(
+            app.parse_persisted_collection("['Hiçbiri', 'Avantajlı']", list),
+            ["Hiçbiri", "Avantajlı"],
+        )
+        self.assertEqual(
+            app.parse_persisted_collection(
+                "{'Karşılamalı': {'price': 90, 'net': 81}}", dict
+            ),
+            {"Karşılamalı": {"price": 90, "net": 81}},
+        )
+        self.assertEqual(app.parse_persisted_collection(float("nan"), list), [])
+
+    def test_dynamic_counter_selection_payload_keeps_string_validation(self):
+        self.assertTrue(
+            app.selection_payload_is_valid(
+                {"A1": "Karşılamalı (300 TL Üzeri / 50 TL İndirim)"}
+            )
+        )
+        self.assertFalse(app.selection_payload_is_valid({"A1": 50}))
 
     def test_result_must_not_predate_the_uploaded_input_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:

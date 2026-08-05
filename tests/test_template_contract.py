@@ -29,6 +29,25 @@ class TemplateContractTests(unittest.TestCase):
         self.assertIn("let selectedCount = 0;", self.template)
         self.assertIn("${selectedCount} ürüne en yüksek netli kampanya seçimi uygulandı.", self.template)
 
+    def test_template_data_and_missing_numbers_are_safe(self):
+        self.assertIn('id="report-columns-data" type="application/json"', self.template)
+        self.assertIn(
+            "JSON.parse(document.getElementById('report-columns-data').textContent)",
+            self.template,
+        )
+        self.assertNotIn("const reportColumns = {{", self.template)
+        self.assertIn(
+            "if (value === null || value === undefined || value === '') return null;",
+            self.template,
+        )
+
+    def test_campaign_actions_have_one_implementation(self):
+        self.assertEqual(self.template.count("function updateSelection("), 1)
+        self.assertEqual(self.template.count("function applyBulkAction("), 1)
+        self.assertIn(
+            "const counter = row.counter_evaluations?.[selection];", self.template
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
