@@ -1,25 +1,156 @@
-Barkod
-Güncel Fiyat (TL)
-Güncel Net
-Güncel Komisyon
-Avantajlı Fiyat (TL)
-Avantajlı Net
-Flaş Fiyat (TL)
-Flaş Net
-Plus Fiyat (TL)
-Plus Net
-Plus Ek İndirim Fiyat (TL)
-Plus Ek İndirim Net
-Uygulanan Kampanya
-Uygulanan Kampanya Fiyat
-Uygulanan Kampanya Net
-Uygulanan Kampanya Komisyon
-Uygulanabilecek İndirim (TL)
-Uygulanabilecek İndirim (%)
-Uygulanan İndirim (TL)
-Uygulanan İndirim (%)
-Ekstra Uygulanabilir İndirim (TL)
-Ekstra Uygulanabilir İndirim (%)
-Hangisi Karlı?
+index.html 408. satırdaki hatayı düzelt. current_problems 
 
-Kampanya_Ozet_Raporu excel çıktısı ve sayfadaki tablo birebir aynı olacak, sayfadaki tablonun sütun görünürlüğüne göre excelde sütunlar oluşacak. Uygulanabilecek İndirim (TL), Uygulanabilecek İndirim (%), Ekstra Uygulanabilir İndirim (TL), Ekstra Uygulanabilir İndirim (%) alanlarının uygulanan indirim değerlerine göre doğru oluştuğundan emin ol, Düşülebilecek Dip Fiyat (TL) bilgisinin de görünebildiğinden emin ol. Düşülebilecek Dip Fiyat (TL) bilgisi indirim uygulanabilecek ürünlerde olan ürünlerden gelecek "Uygulanabilecek İndirim (TL), Uygulanabilecek İndirim (%), Ekstra Uygulanabilir İndirim (TL), Ekstra Uygulanabilir İndirim (%)" bilgileri de yine ilgili hesaplamaları yaparak alsın
+ayrıca şuan tablo da böyle, hem veriler eksik 0 dönüyor, hem de istediğim gibi uygulanan kampanya kısmından ürün bazında kampanyaya atama yapılamıyor:
+
+
+	Barkod	Güncel Fiyat (TL)	Güncel Net	Güncel Komisyon	Avantajlı Fiyat (TL)	Avantajlı Net	Flaş Fiyat (TL)	Flaş Net	Plus Fiyat (TL)	Plus Net	Plus Ek İndirim Fiyat (TL)	Plus Ek İndirim Net	Uygulanan Kampanya	Hangisi Karlı?	Düşülebilecek Dip Fiyat (TL)	Uygulanan Kampanya Fiyat	Uygulanan Kampanya Net	Uygulanan Kampanya Komisyon	Uygulanabilecek İndirim (TL)	Uygulanabilecek İndirim (%)	Uygulanan İndirim (TL)	Uygulanan İndirim (%)	Ekstra Uygulanabilir İndirim (TL)	Ekstra Uygulanabilir İndirim (%)
+	07037446326150	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST1-KOKO-33x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST1-KOKO-40x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST1-KOKO-40x70	1856.00	1447.68	22.00	1077.95	840.80	0.00	0.00	0.00	0.00	1675.04	1354.88	
+Katılabilir kampanya yok
+Avantajlı Ürün	-	1077.95	840.80	22.00	-	-	778.05	41.92	-	-
+	BST1-KOKO-50x90	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST10-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST10-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST10-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST10-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST11-KOKO-33x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST11-KOKO-40x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST11-KOKO-40x70	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST11-KOKO-50x90	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST12-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST12-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST12-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST12-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST13-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST13-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST13-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST13-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST14-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST14-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST14-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST14-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST15-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST15-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST15-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST15-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST16-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST16-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST16-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST16-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST17-KOKO-33x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST17-KOKO-40x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST17-KOKO-40x70	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST17-KOKO-50x90	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST18-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST18-KOKO-40x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-
+	BST18-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST18-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST19-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST19-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST19-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST19-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST20-KOKO-33x60	969.00	755.82	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	969.00	755.82	22.00	-	-	0.00	0.00	-	-
+	BST20-KOKO-40x60	1229.00	958.62	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1229.00	958.62	22.00	-	-	0.00	0.00	-	-
+	BST20-KOKO-40x70	1856.00	1447.68	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	1856.00	1447.68	22.00	-	-	0.00	0.00	-	-
+	BST20-KOKO-50x90	2599.00	2027.22	22.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	2599.00	2027.22	22.00	-	-	0.00	0.00	-	-
+	BST4-KOKO-33x60	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	
+Katılabilir kampanya yok
+Hiçbiri	-	0.00	0.00	0.00	-	-	-	-	-	-

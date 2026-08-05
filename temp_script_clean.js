@@ -1,411 +1,7 @@
-<!DOCTYPE html>
-<html lang="tr" data-theme="lofi">
 
-<head>
-    <meta charset="UTF-8">
-    <title>Trendyol Kampanya Yönetimi</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Tailwind CSS & DaisyUI -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- DataTables CSS -->
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-        }
-
-        .highlight {
-            font-weight: 700;
-            color: #ef4444;
-            /* Tailwind red-500 */
-        }
-
-        /* Modern DataTables Styling */
-        table.dataTable {
-            border-collapse: collapse !important;
-            width: 100% !important;
-        }
-
-        table.dataTable thead th {
-            border: 1px solid #d1d5db !important;
-            background-color: #f3f4f6;
-            color: #111827;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            padding: 1rem 0.5rem !important;
-        }
-
-        table.dataTable tbody td {
-            padding: 0.75rem 0.5rem !important;
-            vertical-align: middle;
-            border: 1px solid #e5e7eb !important;
-            color: #1f2937;
-            font-weight: 500;
-            font-size: 0.875rem;
-        }
-
-        table.dataTable tbody tr:hover {
-            background-color: #f9fafb !important;
-        }
-
-        .dataTables_filter input {
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            padding: 0.375rem 0.75rem;
-            background: #fff;
-            outline: none;
-            transition: all 0.2s;
-        }
-
-        .dataTables_filter input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        .dataTables_length select {
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            padding: 0.375rem 2rem 0.375rem 0.75rem;
-            background: #fff;
-            outline: none;
-        }
-
-        /* Row Colors */
-        .row-avantajli {
-            background-color: #dcfce7 !important;
-        }
-
-        .row-avantajli:hover {
-            background-color: #bbf7d0 !important;
-        }
-
-        .row-flas {
-            background-color: #e0f2fe !important;
-        }
-
-        .row-flas:hover {
-            background-color: #bae6fd !important;
-        }
-
-        .row-plus {
-            background-color: #fef08a !important;
-        }
-
-        .row-plus:hover {
-            background-color: #fde047 !important;
-        }
-
-        #loadingOverlay {
-            z-index: 9999;
-            backdrop-filter: blur(4px);
-        }
-
-        /* Custom scrollbar for table container */
-        .table-container::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-
-        .table-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-
-        .table-container::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-
-        .table-container::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-    </style>
-</head>
-
-<body class="min-h-screen text-gray-800">
-
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);"
-        class="flex-col justify-center items-center text-white">
-        <span class="loading loading-spinner loading-lg text-primary"></span>
-        <h2 class="mt-4 text-xl font-medium tracking-wide">İşlemler gerçekleştiriliyor, lütfen bekleyin...</h2>
-    </div>
-
-    <!-- Toast Notifications -->
-    <div class="toast toast-top toast-end z-[9999]" id="toastContainer"></div>
-
-    <!-- Header Navbar -->
-    <div class="navbar bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 px-4 md:px-8 shadow-sm">
-        <div class="flex-1 gap-3 flex items-center">
-            <div class="p-2 bg-primary/10 rounded-xl text-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-            </div>
-            <h1 class="text-xl font-bold tracking-tight text-gray-900">Trendyol Kampanya Yönetimi</h1>
-        </div>
-        <div class="flex-none gap-2">
-            <button
-                class="btn btn-primary btn-sm shadow-md shadow-primary/20 hover:-translate-y-0.5 transition-transform"
-                onclick="calculateData()">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Verileri Hesapla
-            </button>
-        </div>
-    </div>
-
-    <div class="p-4 md:p-8 w-full max-w-none space-y-6">
-
-        <div class="card bg-white shadow-sm border border-gray-100">
-            <div class="card-body p-6">
-                <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
-                    <div>
-                        <h2 class="card-title text-lg font-semibold text-gray-800">Excel Girdileri</h2>
-                        <p class="text-xs text-gray-500 mt-1">Dosya adları önemli değildir; girdi türü seçilen alan ve sütunlarıyla doğrulanır.</p>
-                    </div>
-                    <span class="badge badge-error badge-outline text-xs">* Zorunlu</span>
-                </div>
-                <!-- Ana kampanya girdileri -->
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    {% for key, spec in input_specs.items() %}
-                    {% if not key.startswith('muhasebe_') %}
-                    {% set uploaded = uploaded_inputs.get(key) %}
-                    <label class="form-control w-full">
-                        <span class="label-text text-xs font-semibold text-gray-600 mb-1">
-                            {{ spec.label }}{% if spec.required %} <span class="text-red-600">*</span>{% endif %}
-                        </span>
-                        <input id="input_{{ key }}" type="file" accept=".xlsx"
-                            data-required="{{ 'true' if spec.required else 'false' }}"
-                            data-uploaded="{{ 'true' if uploaded else 'false' }}"
-                            class="file-input file-input-bordered file-input-sm w-full">
-                        <span id="upload_status_{{ key }}" class="mt-1 text-[11px] text-gray-500 min-h-4">
-                            {% if uploaded %}Yüklendi: {{ uploaded.original_name }} · {{ uploaded.uploaded_at_display }}{% else %}Henüz yüklenmedi{% endif %}
-                        </span>
-                    </label>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-                <!-- Muhasebe kampanya fiyat listeleri -->
-                <div class="mt-5 pt-4 border-t border-amber-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <h3 class="text-sm font-semibold text-amber-700">Muhasebe Kampanya Fiyat Listeleri</h3>
-                        <span class="badge badge-warning badge-outline text-[10px]">Akıllı Öneri için Opsiyonel</span>
-                    </div>
-                    <p class="text-xs text-gray-400 mb-3">Yüklendiğinde, öneri hesaplaması bu listelerdeki ürünler ve fiyatları baz alır. Listede bulunmayan ürünler o kampanyaya sokulmaz.</p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50 rounded-xl p-4 border border-amber-100">
-                        {% for key, spec in input_specs.items() %}
-                        {% if key.startswith('muhasebe_') %}
-                        {% set uploaded = uploaded_inputs.get(key) %}
-                        <label class="form-control w-full">
-                            <span class="label-text text-xs font-semibold text-amber-700 mb-1">{{ spec.label }}</span>
-                            <input id="input_{{ key }}" type="file" accept=".xlsx"
-                                data-required="false"
-                                data-uploaded="{{ 'true' if uploaded else 'false' }}"
-                                class="file-input file-input-bordered file-input-sm w-full border-amber-200 focus:border-amber-400">
-                            <span id="upload_status_{{ key }}" class="mt-1 text-[11px] text-amber-600 min-h-4">
-                                {% if uploaded %}Yüklendi: {{ uploaded.original_name }} · {{ uploaded.uploaded_at_display }}{% else %}Henüz yüklenmedi{% endif %}
-                            </span>
-                        </label>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-                <!-- Karşılamalı Kampanya Dosyaları (Çoklu Yükleme) -->
-                <div class="mt-5 pt-4 border-t border-indigo-100">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <h3 class="text-sm font-semibold text-indigo-800">Karşılamalı Kampanya Dosyaları (Çoklu Yükleme)</h3>
-                            <span class="badge badge-primary badge-outline text-[10px]">Opsiyonel</span>
-                        </div>
-                        <label class="btn btn-primary btn-xs text-white cursor-pointer shadow-sm">
-                            + Karşılamalı Excel Dosyaları Yükle
-                            <input id="input_counter_multi" type="file" accept=".xlsx" multiple class="hidden" onchange="handleMultiCounterUpload(this.files)">
-                        </label>
-                    </div>
-                    <p class="text-xs text-gray-400 mb-3">Birden fazla Karşılamalı Kampanya Excel dosyası yükleyebilirsiniz. Yüklenen her dosya için alt limit (kaç TL üzeri), indirim tutarı ve Trendyol karşılama oranı dosya isminden otomatik algılanır ve aşağıda özelleştirilebilir.</p>
-                    
-                    <div id="counterFilesContainer" class="space-y-3">
-                        <div class="text-xs text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200 text-center">
-                            Henüz özel Karşılamalı Kampanya dosyası yüklenmedi.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Control Panel Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-            <!-- Left Panel: Actions & Bulk -->
-            <div class="lg:col-span-8 space-y-6">
-
-                <div class="card bg-white shadow-sm border border-gray-100 h-full">
-                    <div class="card-body p-6">
-                        <div class="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none"
-                                viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                            </svg>
-                            <h2 class="card-title text-lg font-semibold text-gray-800">Toplu İşlemler ve Seçimler</h2>
-                        </div>
-
-                        <div class="flex flex-wrap items-end gap-4">
-                            <div class="flex-1 min-w-[200px]">
-                                <label class="label px-0 py-1"><span
-                                        class="label-text text-xs font-medium text-gray-500">Hızlı Seçim</span></label>
-                                <div class="flex gap-2">
-                                    <button
-                                        class="btn btn-outline btn-sm border-gray-300 hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
-                                        onclick="autoSelect()">Önerilenleri Seç</button>
-                                    <button
-                                        class="btn btn-ghost btn-sm text-gray-500 hover:bg-gray-100 transition-colors"
-                                        onclick="clearSelections()">Seçim Temizle</button>
-                                </div>
-                            </div>
-
-                            <div class="w-px h-10 bg-gray-200 hidden md:block"></div>
-
-                            <div class="flex-1 min-w-[300px]">
-                                <label class="label px-0 py-1"><span
-                                        class="label-text text-xs font-medium text-gray-500">Toplu Kampanya
-                                        Uygula</span></label>
-                                <div class="join w-full shadow-sm">
-                                    <select id="bulkCampaignSelect"
-                                        class="select select-bordered select-sm join-item focus:outline-none w-full bg-gray-50 border-gray-300">
-                                        <option value="Avantajlı">Avantajlı Yap</option>
-                                        <option value="Flaş">Flaş Yap</option>
-                                        <option value="Plus">Plus Yap</option>
-                                        <option value="Plus Ek İndirim %5">Plus Ek İndirim %5 Yap</option>
-                                        <option value="Plus Ek İndirim %10">Plus Ek İndirim %10 Yap</option>
-                                        <option value="Plus Ek İndirim %20">Plus Ek İndirim %20 Yap</option>
-                                        <option value="Karşılamalı Kampanya">Karşılamalı Kampanya Yap</option>
-                                        <option value="Hiçbiri">Hiçbiri (Temizle)</option>
-                                    </select>
-                                    <button class="btn btn-neutral btn-sm join-item px-6 font-medium"
-                                        onclick="applyBulkAction()">Uygula</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- Right Panel: Export Options -->
-            <div class="lg:col-span-4">
-                <div class="card bg-white shadow-sm border border-gray-100 h-full">
-                    <div class="card-body p-6 flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <h2 class="card-title text-lg font-semibold text-gray-800">Dışa Aktar ve Uygula</h2>
-                            </div>
-                            <p class="text-xs text-gray-500 mb-4">Seçtiğiniz kampanyaları Trendyol şablon Excel
-                                dosyalarına uygulayarak doğrudan indirilebilir çıktı oluşturun.</p>
-                        </div>
-
-                        <div class="dropdown dropdown-end w-full">
-                            <div tabindex="0" role="button"
-                                class="btn btn-success text-white w-full shadow-md shadow-success/20 hover:-translate-y-0.5 transition-transform">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Excel'e Uygula
-                            </div>
-                            <ul tabindex="0"
-                                class="dropdown-content z-[100] menu p-2 shadow-lg bg-white rounded-box w-full mt-2 font-medium text-sm border border-gray-100">
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Hepsi'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Hepsini Oluştur</button></li>
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Avantajlı'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Avantajlı Oluştur</button>
-                                </li>
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Flaş'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Flaş Oluştur</button></li>
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Plus'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Plus Oluştur</button></li>
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Plus Ek İndirim'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Plus Ek İndirim
-                                        Oluştur</button></li>
-                                <li><button type="button"
-                                        onclick="applyCampaigns('Karşılamalı Kampanya'); if(document.activeElement) document.activeElement.blur();"
-                                        class="hover:bg-gray-50 py-3 text-left w-full">Sadece Karşılamalı Kampanya
-                                        Oluştur</button></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Data Table Card -->
-        <div class="card bg-white shadow-xl border border-gray-200 overflow-hidden rounded-2xl w-full">
-            <div class="card-body p-0 w-full">
-                <div class="table-container w-full overflow-x-auto p-4">
-                    <table id="campaignTable" class="table table-compact w-full border-collapse border border-gray-200">
-                        <thead
-                            class="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider border-b-2 border-slate-200">
-                            <tr>
-                                <th style="width:35px; text-align:center;"><input type="checkbox" id="selectAll"
-                                        class="checkbox checkbox-sm checkbox-primary" onclick="toggleAll(this)"
-                                        title="Tümünü Seç"></th>
-                                {% for column in report_columns %}<th>{{ column }}</th>{% endfor %}
-                            </tr>
-                            <tr class="filters bg-gray-50/50">
-                                <th></th>
-                                {% for column in report_columns %}<th data-report-column="{{ column }}"></th>{% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody id="table-body">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- jQuery and DataTables JS -->
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-
-    <script>
         let tableData = [];
         let dataTable = null;
-        const reportColumns = {{ report_columns | tojson }};
+        const reportColumns = JSON.parse('[]');
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
@@ -873,9 +469,32 @@
             }
         }
 
+        function getEligibleCampaigns(row) {
+            let eligible = row.eligible_campaigns;
+            if (typeof eligible === 'string') {
+                try { eligible = JSON.parse(eligible); } catch (e) { eligible = null; }
+            }
+            if (!Array.isArray(eligible) || eligible.length === 0) {
+                const applicableStr = String(row['Uygulanabilir Kampanyalar'] || '');
+                eligible = ['Hiçbiri'];
+                if (applicableStr.includes('Avantajlı') || (row['Avantajlı Fiyat (TL)'] && Number(row['Avantajlı Fiyat (TL)']) > 0)) eligible.push('Avantajlı');
+                if (applicableStr.includes('Flaş') || (row['Flaş Fiyat (TL)'] && Number(row['Flaş Fiyat (TL)']) > 0)) eligible.push('Flaş');
+                if (applicableStr.includes('Plus') || (row['Plus Fiyat (TL)'] && Number(row['Plus Fiyat (TL)']) > 0)) eligible.push('Plus');
+                if (applicableStr.includes('Plus Ek İndirim') || (row['Plus Ek İndirim Fiyat (TL)'] && Number(row['Plus Ek İndirim Fiyat (TL)']) > 0)) {
+                    eligible.push('Plus Ek İndirim %5', 'Plus Ek İndirim %10', 'Plus Ek İndirim %20');
+                }
+                if (applicableStr.includes('Karşılamalı Kampanya')) eligible.push('Karşılamalı Kampanya');
+            }
+            if (!eligible.includes('Hiçbiri')) eligible.unshift('Hiçbiri');
+            if (row.userSelection && row.userSelection !== 'Hiçbiri' && !eligible.includes(row.userSelection)) {
+                eligible.push(row.userSelection);
+            }
+            return Array.from(new Set(eligible));
+        }
+
         function campaignSelectionHtml(row) {
             const rowIndex = row._index;
-            const eligible = Array.isArray(row.eligible_campaigns) ? row.eligible_campaigns : ['Hiçbiri'];
+            const eligible = getEligibleCampaigns(row);
             
             let selectHtml = `<select class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-primary/40 focus:border-primary" onchange="updateSelection(${rowIndex}, this.value)">`;
             
@@ -1286,7 +905,4 @@
             if (dataTable) dataTable.rows().invalidate().draw(false);
             showToast(`Kurallar çalıştırıldı ve ${matchCount} adet ürünün seçimi güncellendi.`, 'success');
         }
-    </script>
-</body>
-
-</html>
+    

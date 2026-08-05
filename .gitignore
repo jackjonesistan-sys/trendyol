@@ -1,4 +1,10 @@
-/Çıktılar
-./Çıktılar
-.Çıktılar
 Çıktılar
+
+# Uygulama ve yerel doğrulama çalışma zamanı dosyaları
+__pycache__/
+*.py[cod]
+.playwright-cli/
+Girdiler/Yuklenen/
+Girdiler/yuklenen_girdiler.json
+
+venv
