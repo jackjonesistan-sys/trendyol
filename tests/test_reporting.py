@@ -46,6 +46,8 @@ class ReportingTests(unittest.TestCase):
                 "Plus Net",
                 "Plus Ek İndirim Fiyat (TL)",
                 "Plus Ek İndirim Net",
+                "Karşılamalı Kampanya Fiyat (TL)",
+                "Karşılamalı Kampanya Net",
                 "Uygulanan Kampanya",
                 "Hangisi Karlı?",
                 "Düşülebilecek Dip Fiyat (TL)",
@@ -146,18 +148,15 @@ class ReportingTests(unittest.TestCase):
             root = Path(temp_dir)
             manifest = root / "manifest.json"
             result = root / "result.xlsx"
-            result.touch()
-            manifest.touch()
-            old_result, old_manifest = app.F_HESAP, app.INPUT_MANIFEST
-            app.F_HESAP, app.INPUT_MANIFEST = str(result), str(manifest)
+            result.write_bytes(b"data")
+            old_result = app.F_HESAP
+            app.F_HESAP = str(result)
             try:
-                os.utime(result, (3, 3))
-                os.utime(manifest, (2, 2))
                 self.assertTrue(app.calculation_result_is_current())
-                os.utime(manifest, (4, 4))
+                result.unlink()
                 self.assertFalse(app.calculation_result_is_current())
             finally:
-                app.F_HESAP, app.INPUT_MANIFEST = old_result, old_manifest
+                app.F_HESAP = old_result
 
 
 if __name__ == "__main__":

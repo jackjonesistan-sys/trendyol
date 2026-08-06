@@ -341,7 +341,8 @@ class CalculatorInputTests(unittest.TestCase):
             rows = {row["Barkod"]: row for row in result["results"]}
 
             self.assertEqual(rows["A1"]["Plus Fiyatı (TL)"], 100)
-            self.assertEqual(rows["A1"]["İlk Kampanya Seçimi"], "Plus")
+            self.assertEqual(rows["A1"]["İlk Kampanya Seçimi"], "Hiçbiri")
+            self.assertEqual(rows["A1"]["Önerilen Kampanya"], "Plus")
             self.assertIn("Plus", rows["A1"]["eligible_campaigns"])
             self.assertEqual(rows["A2"]["İlk Kampanya Seçimi"], "Hiçbiri")
             self.assertEqual(rows["A2"]["eligible_campaigns"], ["Hiçbiri"])

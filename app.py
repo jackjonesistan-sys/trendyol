@@ -1,3 +1,22 @@
+import math
+
+def clean_nans(obj):
+    """Recursively replaces NaN, Infinity, -Infinity values with None for standard JSON serialization."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: clean_nans(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nans(v) for v in obj]
+    try:
+        if pd.isna(obj):
+            return None
+    except Exception:
+        pass
+    return obj
+
 import ast
 import os
 import json
@@ -13,6 +32,11 @@ from input_files import (
     load_upload_set,
     load_upload_status,
     save_upload_set,
+    load_counter_configs,
+    load_plus_extra_configs,
+    save_single_file_expiries,
+    load_user_selections,
+    save_user_selections,
 )
 from xlsx_postprocess import fix_xlsx_for_trendyol
 
@@ -43,6 +67,8 @@ REPORT_COLUMNS = [
     "Plus Net",
     "Plus Ek İndirim Fiyat (TL)",
     "Plus Ek İndirim Net",
+    "Karşılamalı Kampanya Fiyat (TL)",
+    "Karşılamalı Kampanya Net",
     "Uygulanan Kampanya",
     "Hangisi Karlı?",
     "Düşülebilecek Dip Fiyat (TL)",
@@ -186,20 +212,14 @@ def selected_campaign_values(row):
 
 def build_report_row(row):
     selection = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
-    is_discount_eligible = row.get("İndirim Uygulanabilir") == "Evet"
     current_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
     campaign_price, campaign_net, campaign_commission = selected_campaign_values(row)
     applied_amount, applied_percent = discount_between(current_price, campaign_price)
-    dip_price = (
-        as_number(row.get("Düşülebilecek Dip Fiyat (TL)"))
-        if is_discount_eligible
-        else None
-    )
-    available_amount, available_percent = (
-        discount_between(current_price, dip_price)
-        if is_discount_eligible
-        else (None, None)
-    )
+    
+    # Dip fiyat indirimli ürünlerde veya muhasebe listelerinden gelen dip fiyattır
+    dip_price = as_number(row.get("Düşülebilecek Dip Fiyat (TL)"))
+    available_amount, available_percent = discount_between(current_price, dip_price)
+
     extra_amount = None
     extra_percent = None
     if available_amount is not None and applied_amount is not None:
@@ -214,6 +234,14 @@ def build_report_row(row):
         plus_extra_price = None
         plus_extra_net = None
 
+    counter_evals = row.get("counter_evaluations", {})
+    counter_price = None
+    counter_net = None
+    if isinstance(counter_evals, dict) and selection in counter_evals:
+        c_info = counter_evals[selection]
+        counter_price = as_number(c_info.get("price"))
+        counter_net = as_number(c_info.get("net"))
+
     return {
         "Barkod": row.get("Barkod"),
         "Güncel Fiyat (TL)": current_price,
@@ -227,6 +255,8 @@ def build_report_row(row):
         "Plus Net": as_number(row.get("Plus Net (TL)")),
         "Plus Ek İndirim Fiyat (TL)": plus_extra_price,
         "Plus Ek İndirim Net": plus_extra_net,
+        "Karşılamalı Kampanya Fiyat (TL)": counter_price,
+        "Karşılamalı Kampanya Net": counter_net,
         "Uygulanan Kampanya": CAMPAIGN_LABELS.get(selection, selection),
         "Hangisi Karlı?": row.get("Hangisi Daha Karlı?"),
         "Düşülebilecek Dip Fiyat (TL)": dip_price,
@@ -265,11 +295,7 @@ def campaign_selection_is_applicable(selection, applicable_value):
 
 def calculation_result_is_current():
     try:
-        return (
-            os.path.isfile(F_HESAP)
-            and os.path.isfile(INPUT_MANIFEST)
-            and os.path.getmtime(F_HESAP) >= os.path.getmtime(INPUT_MANIFEST)
-        )
+        return os.path.isfile(F_HESAP) and os.path.getsize(F_HESAP) > 0
     except OSError:
         return False
 
@@ -377,6 +403,8 @@ def index():
         report_columns=REPORT_COLUMNS,
         input_specs=INPUT_SPECS,
         uploaded_inputs=load_upload_status(UPLOAD_DIR, INPUT_MANIFEST),
+        counter_configs=load_counter_configs(INPUT_MANIFEST),
+        plus_extra_configs=load_plus_extra_configs(INPUT_MANIFEST),
     )
 
 
@@ -384,17 +412,72 @@ def index():
 def upload_too_large(_error):
     return jsonify({"success": False, "message": "Yükleme toplam boyut sınırını aşıyor."}), 413
 
+
+@app.route("/api/save-expiry", methods=["POST"])
+def save_expiry():
+    """Tarih bilgilerini hesaplama yapmadan anında kaydeder."""
+    data = request.get_json(silent=True) or {}
+    try:
+        # Tek dosya expiry'leri
+        single_expiries = data.get("single_expiries", {})
+        if single_expiries and isinstance(single_expiries, dict):
+            save_single_file_expiries(INPUT_MANIFEST, single_expiries)
+
+        # Çoklu dosya (counter) expiry'leri
+        counter_expiries = data.get("counter_expiries", {})
+        if counter_expiries and isinstance(counter_expiries, dict):
+            from input_files import load_counter_configs, save_counter_configs
+            configs = load_counter_configs(INPUT_MANIFEST)
+            for cfg in configs:
+                cid = cfg.get("id", "")
+                if cid in counter_expiries:
+                    cfg["expiry_date"] = counter_expiries[cid]
+            save_counter_configs(INPUT_MANIFEST, configs)
+
+        # Çoklu dosya (plus_extra) expiry'leri
+        plus_extra_expiries = data.get("plus_extra_expiries", {})
+        if plus_extra_expiries and isinstance(plus_extra_expiries, dict):
+            from input_files import load_plus_extra_configs, save_plus_extra_configs
+            configs = load_plus_extra_configs(INPUT_MANIFEST)
+            for cfg in configs:
+                cid = cfg.get("id", "")
+                if cid in plus_extra_expiries:
+                    cfg["expiry_date"] = plus_extra_expiries[cid]
+            save_plus_extra_configs(INPUT_MANIFEST, configs)
+
+        return jsonify({"success": True})
+    except Exception:
+        app.logger.exception("Tarih kaydedilirken hata")
+        return jsonify({"success": False, "message": "Tarih kaydedilemedi."}), 500
+
 @app.route("/api/data")
 def get_data():
     if not calculation_result_is_current():
         return jsonify({"needs_calculation": True, "message": "Lütfen önce 'Verileri Güncelle' butonuna basarak hesaplamaları başlatın."}), 200
         
     df = restore_persisted_collections(pd.read_excel(F_HESAP))
-    return app.response_class(
-        response=df.to_json(orient="records"),
-        status=200,
-        mimetype='application/json'
-    )
+    records = df.to_dict(orient="records")
+    user_selections = load_user_selections(INPUT_MANIFEST)
+    if user_selections and isinstance(user_selections, dict):
+        for rec in records:
+            b = str(rec.get("Barkod", "")).strip()
+            if b in user_selections:
+                rec["İlk Kampanya Seçimi"] = user_selections[b]
+    cleaned_records = clean_nans(records)
+    return jsonify(cleaned_records), 200
+
+@app.route("/api/save-selections", methods=["POST"])
+def save_selections_endpoint():
+    try:
+        data = request.get_json(silent=True) or {}
+        selections = data.get("selections", {})
+        if isinstance(selections, dict):
+            save_user_selections(INPUT_MANIFEST, selections)
+            return jsonify({"success": True, "saved_count": len(selections)})
+        return jsonify({"success": False, "message": "Geçersiz veri biçimi."}), 400
+    except Exception:
+        app.logger.exception("Seçimler kaydedilirken hata")
+        return jsonify({"success": False, "message": "Seçimler kaydedilemedi."}), 500
 
 @app.route("/api/calculate", methods=["POST"])
 def calculate():
@@ -408,6 +491,14 @@ def calculate():
         }
 
         input_files = save_upload_set(standard_files, UPLOAD_DIR, INPUT_MANIFEST)
+
+        single_expiries_raw = request.form.get("single_expiries_json")
+        if single_expiries_raw:
+            try:
+                single_expiries = json.loads(single_expiries_raw)
+                save_single_file_expiries(INPUT_MANIFEST, single_expiries)
+            except Exception as exp_err:
+                print("Single expiries parse error:", exp_err)
 
         counter_configs_raw = request.form.get("counter_configs_json")
         counter_configs = json.loads(counter_configs_raw) if counter_configs_raw else []
@@ -438,13 +529,53 @@ def calculate():
             counter_files.append({
                 "id": item.get("id", f"counter_{idx+1}"),
                 "label": label,
+                "filename": item.get("filename") or item.get("original_name") or f"counter_{idx+1}.xlsx",
                 "path": item.get("stored_path"),
                 "min_price": min_p,
                 "discount_amount": disc_amt,
                 "trendyol_percent": tr_pct,
+                "expiry_date": item.get("expiry_date", ""),
             })
 
         save_counter_configs(INPUT_MANIFEST, counter_files)
+
+        from input_files import save_plus_extra_configs, load_plus_extra_configs
+
+        plus_extra_configs_raw = request.form.get("plus_extra_configs_json")
+        plus_extra_configs = json.loads(plus_extra_configs_raw) if plus_extra_configs_raw else []
+
+        plus_extra_files = []
+        plus_extra_dir = os.path.join(UPLOAD_DIR, "plus_extra_files")
+        os.makedirs(plus_extra_dir, exist_ok=True)
+
+        for idx, item in enumerate(plus_extra_configs):
+            file_key = f"plus_extra_file_{idx}"
+            file_obj = request.files.get(file_key)
+            stored_name = f"plus_extra_{idx+1}.xlsx"
+            target_path = os.path.join(plus_extra_dir, stored_name)
+
+            if file_obj and file_obj.filename:
+                file_obj.save(target_path)
+                item["stored_path"] = target_path
+                item["original_name"] = file_obj.filename
+            else:
+                if os.path.exists(target_path):
+                    item["stored_path"] = target_path
+
+            rate = float(item.get("rate", 0))
+            label = item.get("label") or (f"Plus Ek İndirim %{int(rate) if rate.is_integer() else rate}" if rate > 0 else f"Plus Ek İndirim #{idx+1}")
+
+            plus_extra_files.append({
+                "id": item.get("id", f"plus_extra_{idx+1}"),
+                "label": label,
+                "filename": item.get("filename") or item.get("original_name") or f"plus_extra_{idx+1}.xlsx",
+                "path": item.get("stored_path"),
+                "rate": rate,
+                "expiry_date": item.get("expiry_date", ""),
+            })
+
+        save_plus_extra_configs(INPUT_MANIFEST, plus_extra_files)
+
 
         toplam_indirim = float(request.form.get("toplam_indirim", 0) or 0)
         trendyol_oran = float(request.form.get("trendyol_oran", 0) or 0)
@@ -455,10 +586,16 @@ def calculate():
             "trendyol_oran": trendyol_oran,
         }
 
-        result = calculate_all(input_files, counter_files=counter_files, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR)
+        # Reset saved user selections on new calculation so all products start fresh as 'Hiçbiri'
+        save_user_selections(INPUT_MANIFEST, {})
+        user_selections = {}
+        result = calculate_all(input_files, counter_files=counter_files, plus_extra_files=plus_extra_files, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR, user_selections=user_selections)
         if result.get("success"):
             result["uploads"] = load_upload_status(UPLOAD_DIR, INPUT_MANIFEST)
+            result["counter_configs"] = load_counter_configs(INPUT_MANIFEST)
+            result["plus_extra_configs"] = load_plus_extra_configs(INPUT_MANIFEST)
             pd.DataFrame(result["results"]).to_excel(F_HESAP, index=False)
+            result = clean_nans(result)
         return jsonify(result), (200 if result.get("success") else 500)
     except InputValidationError as e:
         return jsonify({"success": False, "message": str(e)}), 400
@@ -500,9 +637,15 @@ def apply_campaign():
             "message": "Hesap sonucu okunamadı; girdileri yeniden hesaplayın.",
         }), 500
 
+    ignore_zero_stock = bool(data.get("ignore_zero_stock", True))
+
     table_data = []
     for row in raw_rows:
         barcode = str(row.get("Barkod", "")).strip()
+        stok = as_number(row.get("Stok Adedi"))
+        if ignore_zero_stock and stok is not None and stok == 0:
+            continue
+
         selection = selections.get(
             barcode, row.get("İlk Kampanya Seçimi", "Hiçbiri")
         )
@@ -574,11 +717,11 @@ def apply_campaign():
                 
                 if keep_rows:
                     safe_keep_rows(ws_av, keep_rows)
-                    out_name = os.path.join(run_output_dir, "Avantajlı Ürün.xlsx")
+                    out_name = os.path.join(run_output_dir, "Avantajli_Urun_Etiketleri.xlsx")
                     shrink_data_validations(ws_av)
                     wb_av.save(out_name)
                     fix_xlsx_for_trendyol(out_name)
-                    generated_files.append(os.path.join(timestamp_folder, "Avantajlı Ürün.xlsx"))
+                    generated_files.append(os.path.join(timestamp_folder, "Avantajli_Urun_Etiketleri.xlsx"))
         except Exception:
             return processing_error("Avantajlı dosya")
 
@@ -624,11 +767,11 @@ def apply_campaign():
                                 ws_copy.cell(r, fiyat_24_idx).value = float(selected_price)
                             ws_copy.cell(r, guncel_fiyat_idx).value = "24 Saat"
                         safe_keep_rows(ws_copy, keep_rows)
-                        out_name = os.path.join(run_output_dir, f"Flas_Urun_{date_key}.xlsx")
+                        out_name = os.path.join(run_output_dir, f"Flas_Urunler_{date_key}.xlsx")
                         shrink_data_validations(ws_copy)
                         wb_copy.save(out_name)
                         fix_xlsx_for_trendyol(out_name)
-                        generated_files.append(os.path.join(timestamp_folder, f"Flas_Urun_{date_key}.xlsx"))
+                        generated_files.append(os.path.join(timestamp_folder, f"Flas_Urunler_{date_key}.xlsx"))
                 
         except Exception:
             return processing_error("Flaş dosya")
@@ -673,28 +816,33 @@ def apply_campaign():
                 
                     if keep_rows:
                         safe_keep_rows(ws_plus, keep_rows)
-                        out_name = os.path.join(run_output_dir, "Plus_Urun.xlsx")
+                        out_name = os.path.join(run_output_dir, "Plus_Komisyon_Tarifeleri.xlsx")
                         shrink_data_validations(ws_plus)
                         wb_plus.save(out_name)
                         fix_xlsx_for_trendyol(out_name)
-                        generated_files.append(os.path.join(timestamp_folder, "Plus_Urun.xlsx"))
+                        generated_files.append(os.path.join(timestamp_folder, "Plus_Komisyon_Tarifeleri.xlsx"))
             except Exception:
                 return processing_error("Plus dosya")
 
-    # 4. Process Plus Ek İndirim
+    # 4. Process Plus Ek İndirim (Çoklu Dosya Desteği)
     if target_type in ['Hepsi', 'Plus Ek İndirim']:
-        if F_PLUS_EK:
-            try:
-                for rate in [5, 10, 20]:
-                    wb_pe = openpyxl.load_workbook(F_PLUS_EK)
+        try:
+            from input_files import load_plus_extra_configs
+            plus_extra_configs = load_plus_extra_configs(INPUT_MANIFEST)
+            
+            for idx, pe_item in enumerate(plus_extra_configs):
+                pe_path = pe_item.get('path')
+                if pe_path and os.path.exists(pe_path):
+                    wb_pe = openpyxl.load_workbook(pe_path)
                     ws_pe = wb_pe.active
                     header_pe = [ws_pe.cell(1, c).value for c in range(1, ws_pe.max_column + 1)]
                     b_idx_pe = header_pe.index('Barkod') + 1 if 'Barkod' in header_pe else None
                     fiyat_idx_pe = header_pe.index('Kampanyalı Satış Fiyatı') + 1 if 'Kampanyalı Satış Fiyatı' in header_pe else None
                     max_fiyat_idx_pe = header_pe.index('Maksimum Girebileceğin Fiyat') + 1 if 'Maksimum Girebileceğin Fiyat' in header_pe else None
-                
+                    
                     if b_idx_pe and fiyat_idx_pe and max_fiyat_idx_pe:
-                        target_sel = f"Plus Ek İndirim %{rate}"
+                        c_label = pe_item.get('label') or f"Plus Ek İndirim #{idx+1}"
+                        rate = pe_item.get('rate', 0)
                         keep_rows = []
                         for r in range(2, ws_pe.max_row + 1):
                             b_val = ws_pe.cell(r, b_idx_pe).value
@@ -702,28 +850,24 @@ def apply_campaign():
 
                             b_val_str = str(b_val).strip()
                             sel = selections.get(b_val_str, "Hiçbiri")
-                            should_keep = sel == target_sel
-
-                            if should_keep:
-                                row_info = row_by_barcode.get(b_val_str, {})
-                                campaign_price = row_info.get(f'Plus Ek Fiyatı %{rate} (TL)')
-                                if campaign_price is None or pd.isna(campaign_price):
-                                    campaign_price = discounted_price(
-                                        ws_pe.cell(r, max_fiyat_idx_pe).value, rate
-                                    )
+                            if sel == c_label:
+                                max_f = ws_pe.cell(r, max_fiyat_idx_pe).value
+                                campaign_price = discounted_price(max_f, rate) if max_f and rate > 0 else max_f
                                 if campaign_price is not None:
                                     ws_pe.cell(r, fiyat_idx_pe).value = float(campaign_price)
                                 keep_rows.append(r)
 
                         if keep_rows:
                             safe_keep_rows(ws_pe, keep_rows)
-                            out_name = os.path.join(run_output_dir, f"Plus_Ek_Indirim_{rate}.xlsx")
+                            safe_label = "".join(c for c in c_label if c.isalnum() or c in (' ', '_', '-')).strip()
+                            file_name = f"Plus_Ek_Indirim_{idx+1}_{safe_label}.xlsx"
+                            out_name = os.path.join(run_output_dir, file_name)
                             shrink_data_validations(ws_pe)
                             wb_pe.save(out_name)
                             fix_xlsx_for_trendyol(out_name)
-                            generated_files.append(os.path.join(timestamp_folder, f"Plus_Ek_Indirim_{rate}.xlsx"))
-            except Exception:
-                return processing_error("Plus Ek İndirim dosyası")
+                            generated_files.append(os.path.join(timestamp_folder, file_name))
+        except Exception as e:
+            print("Plus Ek İndirim export error:", e)
 
     # 5. Process Karşılamalı Kampanya (Çoklu Dosya Desteği)
     if target_type in ['Hepsi', 'Karşılamalı Kampanya']:

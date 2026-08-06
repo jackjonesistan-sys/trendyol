@@ -23,7 +23,7 @@ class TemplateContractTests(unittest.TestCase):
 
     def test_recommendation_button_applies_the_best_campaign_candidate(self):
         self.assertIn(
-            "row.userSelection = row['İlk Kampanya Seçimi'] || 'Hiçbiri';",
+            "const rec = row['Önerilen Kampanya'] || 'Hiçbiri';",
             self.template,
         )
         self.assertIn("let selectedCount = 0;", self.template)

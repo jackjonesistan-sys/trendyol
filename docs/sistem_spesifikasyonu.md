@@ -40,7 +40,7 @@ python app.py
 
 | Form alanı | Arayüz etiketi | Zorunlu | Kalıcı iç ad | Zorunlu sütunlar |
 | --- | --- | --- | --- | --- |
-| `discount` | İndirim uygulanabilecek ürünler | Evet | `discount.xlsx` | `BARKOD`, `Eski Fiyat`, `YENİ Fiyat`, `Durum` |
+| `discount` | İndirim Uygulanabilecek Ürünler | Evet | `discount.xlsx` | `BARKOD`, `Eski Fiyat`, `YENİ Fiyat`, `Durum` |
 | `commission` | Komisyon tarifesi | Evet | `commission.xlsx` | `BARKOD`, `1.Fiyat Alt Limit`, `2.Fiyat Üst Limiti`, `2.Fiyat Alt Limit`, `3.Fiyat Üst Limiti`, `3.Fiyat Alt Limit`, `4.Fiyat Üst Limiti`, `1.KOMİSYON`, `2.KOMİSYON`, `3.KOMİSYON`, `4.KOMİSYON`, `KOMİSYONA ESAS FİYAT`, `TARİFE GRUBU` |
 | `current` | Güncel ürünler | Evet | `current.xlsx` | `Barkod`, `Komisyon Oranı`, `Piyasa Satış Fiyatı (KDV Dahil)`, `Trendyol'da Satılacak Fiyat (KDV Dahil)` |
 | `advantage` | Avantajlı ürün | Hayır | `advantage.xlsx` | `BARKOD`, `1 YILDIZ ÜST FİYAT`, `YENİ TSF (FİYAT GÜNCELLE)` |

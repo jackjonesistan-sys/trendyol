@@ -10,13 +10,13 @@ import pandas as pd
 
 INPUT_SPECS = {
     "discount": {
-        "label": "İndirim uygulanabilecek ürünler",
-        "required": True,
+        "label": "İndirim Uygulanabilecek Ürünler",
+        "required": False,
         "filename": "discount.xlsx",
         "columns": {"BARKOD", "Eski Fiyat", "YENİ Fiyat", "Durum"},
     },
     "commission": {
-        "label": "Komisyon tarifesi",
+        "label": "Ürün Komisyon Tarifeleri",
         "required": True,
         "filename": "commission.xlsx",
         "columns": {
@@ -36,7 +36,7 @@ INPUT_SPECS = {
         },
     },
     "current": {
-        "label": "Güncel ürünler",
+        "label": "Ürün Listesi",
         "required": True,
         "filename": "current.xlsx",
         "columns": {
@@ -47,13 +47,13 @@ INPUT_SPECS = {
         },
     },
     "advantage": {
-        "label": "Avantajlı ürün",
+        "label": "Avantajlı Ürün Etiketleri",
         "required": False,
         "filename": "advantage.xlsx",
         "columns": {"BARKOD", "1 YILDIZ ÜST FİYAT", "YENİ TSF (FİYAT GÜNCELLE)"},
     },
     "flash": {
-        "label": "Flaş ürün",
+        "label": "Flaş Ürünler",
         "required": False,
         "filename": "flash.xlsx",
         "columns": {
@@ -65,7 +65,7 @@ INPUT_SPECS = {
         },
     },
     "plus": {
-        "label": "Plus ürün",
+        "label": "Plus Komisyon Tarifeleri",
         "required": False,
         "filename": "plus.xlsx",
         "columns": {
@@ -76,26 +76,20 @@ INPUT_SPECS = {
             "Tarife Seçimi",
         },
     },
-    "plus_extra": {
-        "label": "Plus ek indirim",
-        "required": False,
-        "filename": "plus_extra.xlsx",
-        "columns": {"Barkod", "Maksimum Girebileceğin Fiyat", "Kampanyalı Satış Fiyatı"},
-    },
     "muhasebe_avantaj": {
-        "label": "Muhasebe – Avantajlı fiyat listesi",
+        "label": "Muhasebe – Avantajlı Ürün Etiketleri",
         "required": False,
         "filename": "muhasebe_avantaj.xlsx",
         "columns": {"BARKOD", "YENİ TSF (FİYAT GÜNCELLE)"},
     },
     "muhasebe_flas": {
-        "label": "Muhasebe – Flaş fiyat listesi",
+        "label": "Muhasebe – Flaş Ürünler",
         "required": False,
         "filename": "muhasebe_flas.xlsx",
         "columns": {"Barkod", "Senin Belirlediğin Flaş Fiyatı"},
     },
     "muhasebe_plus": {
-        "label": "Muhasebe – Plus fiyat listesi",
+        "label": "Muhasebe – Plus Komisyon Tarifeleri",
         "required": False,
         "filename": "muhasebe_plus.xlsx",
         "columns": {"Barkod", "Plus Fiyat Üst Limiti"},
@@ -216,11 +210,15 @@ def save_upload_set(files, upload_dir, manifest_path):
             uploaded_at = item.get("uploaded_at")
             if not uploaded_at:
                 uploaded_at = datetime.fromtimestamp(path.stat().st_mtime).astimezone().isoformat(timespec="seconds")
-            manifest_files[key] = {
+            entry = {
                 "stored_name": path.name,
                 "original_name": item.get("original_name") or path.name,
                 "uploaded_at": uploaded_at,
             }
+            # Varsa expiry_date de koru - hesapla yapilinca kaybolmasin
+            if item.get("expiry_date"):
+                entry["expiry_date"] = item["expiry_date"]
+            manifest_files[key] = entry
 
         uploaded_at = datetime.now().astimezone().isoformat(timespec="seconds")
         for key, temp_path in staged.items():
@@ -234,11 +232,13 @@ def save_upload_set(files, upload_dir, manifest_path):
                 "uploaded_at": uploaded_at,
             }
 
-        manifest = {"files": manifest_files}
+        # Mevcut manifest'teki diğer anahtarları (counter_configs, plus_extra_configs vb.) koru
+        existing_manifest = _read_manifest(manifest_path)
+        existing_manifest["files"] = manifest_files
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
         ) as temp_manifest:
-            json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+            json.dump(existing_manifest, temp_manifest, ensure_ascii=False, indent=2)
             temp_manifest_path = Path(temp_manifest.name)
         os.replace(temp_manifest_path, manifest_path)
         return saved
@@ -280,6 +280,34 @@ def load_counter_configs(manifest_path):
     return manifest.get("counter_configs", [])
 
 
+def parse_plus_extra_filename(filename):
+    pattern = r'%?\s*(\d+)\s*%?'
+    m = re.search(pattern, str(filename))
+    if m:
+        try:
+            return float(m.group(1))
+        except (ValueError, TypeError):
+            pass
+    return 0.0
+
+
+def save_plus_extra_configs(manifest_path, plus_extra_configs):
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    manifest["plus_extra_configs"] = plus_extra_configs
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
+    ) as temp_manifest:
+        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+        temp_manifest_path = Path(temp_manifest.name)
+    os.replace(temp_manifest_path, manifest_path)
+
+
+def load_plus_extra_configs(manifest_path):
+    manifest = _read_manifest(manifest_path)
+    return manifest.get("plus_extra_configs", [])
+
+
 def load_upload_set(upload_dir, manifest_path):
     upload_dir = Path(upload_dir).resolve()
     entries = _valid_manifest_entries(
@@ -306,5 +334,47 @@ def load_upload_status(upload_dir, manifest_path):
             "original_name": item.get("original_name") or path.name,
             "uploaded_at": uploaded_at,
             "uploaded_at_display": uploaded_datetime.astimezone().strftime("%d.%m.%Y %H:%M"),
+            "expiry_date": item.get("expiry_date", ""),
         }
     return status
+
+
+def save_single_file_expiries(manifest_path, expiries_dict):
+    if not isinstance(expiries_dict, dict):
+        return
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    files = manifest.get("files", {})
+    updated = False
+    for k, expiry in expiries_dict.items():
+        if k in files:
+            files[k]["expiry_date"] = str(expiry or "")
+            updated = True
+    if updated:
+        manifest["files"] = files
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
+        ) as temp_manifest:
+            json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+            temp_manifest_path = Path(temp_manifest.name)
+        os.replace(temp_manifest_path, manifest_path)
+
+
+def load_user_selections(manifest_path):
+    manifest = _read_manifest(manifest_path)
+    return manifest.get("user_selections", {})
+
+
+def save_user_selections(manifest_path, selections_dict):
+    if not isinstance(selections_dict, dict):
+        return
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    manifest["user_selections"] = selections_dict
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
+    ) as temp_manifest:
+        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+        temp_manifest_path = Path(temp_manifest.name)
+    os.replace(temp_manifest_path, manifest_path)
+
