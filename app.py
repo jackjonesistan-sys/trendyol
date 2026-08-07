@@ -126,6 +126,7 @@ def restore_persisted_collections(frame):
         for column, expected_type in (
             ("eligible_campaigns", list),
             ("counter_evaluations", dict),
+            ("dip_details", list),
         )
         if column in frame.columns
     })
@@ -698,6 +699,7 @@ def apply_campaign():
             header_av = [ws_av.cell(1, c).value for c in range(1, ws_av.max_column + 1)]
             b_idx_av = header_av.index('BARKOD') + 1 if 'BARKOD' in header_av else None
             tsf_idx_av = header_av.index('YENİ TSF (FİYAT GÜNCELLE)') + 1 if 'YENİ TSF (FİYAT GÜNCELLE)' in header_av else None
+            tarife_idx_av = header_av.index('Tarife Sonuna Kadar Uygula') + 1 if 'Tarife Sonuna Kadar Uygula' in header_av else None
         
             if b_idx_av and tsf_idx_av:
                 keep_rows = []
@@ -713,6 +715,8 @@ def apply_campaign():
                         selected_price = row_info.get('Avantajlı Ürün Fiyatı (YENİ TSF) (TL)')
                         if selected_price is not None and not pd.isna(selected_price):
                             ws_av.cell(r, tsf_idx_av).value = float(selected_price)
+                        if tarife_idx_av:
+                            ws_av.cell(r, tarife_idx_av).value = "Evet"
                         keep_rows.append(r)
                 
                 if keep_rows:
@@ -776,7 +780,7 @@ def apply_campaign():
         except Exception:
             return processing_error("Flaş dosya")
 
-    # 3. Process Plus
+    # 3. Process Plus (Grouped by Date Interval)
     if target_type in ['Hepsi', 'Plus']:
         if F_PLUS:
             try:
@@ -788,9 +792,11 @@ def apply_campaign():
                 tarife_secim_idx = header_plus.index('Tarife Seçimi') + 1 if 'Tarife Seçimi' in header_plus else None
                 ust_limit_idx = header_plus.index('Plus Fiyat Üst Limiti') + 1 if 'Plus Fiyat Üst Limiti' in header_plus else None
             
+                tarih_idx_plus = None
                 gun_sayisi = 7
-                for col in header_plus:
+                for idx_c, col in enumerate(header_plus):
                     if col and "Tarih Aralığı" in str(col):
+                        tarih_idx_plus = idx_c + 1
                         import re
                         match = re.search(r'\((\d+)\s*Gün\)', str(col))
                         if match:
@@ -798,29 +804,56 @@ def apply_campaign():
                         break
                     
                 if b_idx_plus and fiyat_secim_idx and tarife_secim_idx and ust_limit_idx:
-                    keep_rows = []
+                    date_groups = {}  # {date_key: [row_indices]}
+                    import re
+
                     for r in range(2, ws_plus.max_row + 1):
                         b_val = ws_plus.cell(r, b_idx_plus).value
                         if not b_val: continue
                         b_val_str = str(b_val).strip()
                         sel = selections.get(b_val_str, "Hiçbiri")
-                        row_info = row_by_barcode.get(b_val_str, {})
                         should_keep = sel == "Plus"
 
                         if should_keep:
-                            ust_lim = ws_plus.cell(r, ust_limit_idx).value
-                            selected_price = row_info.get('Plus Fiyatı (TL)')
-                            ws_plus.cell(r, fiyat_secim_idx).value = selected_price if selected_price is not None and not pd.isna(selected_price) else ust_lim
-                            ws_plus.cell(r, tarife_secim_idx).value = f"{gun_sayisi} Günlük Fiyat"
-                            keep_rows.append(r)
-                
-                    if keep_rows:
-                        safe_keep_rows(ws_plus, keep_rows)
-                        out_name = os.path.join(run_output_dir, "Plus_Komisyon_Tarifeleri.xlsx")
-                        shrink_data_validations(ws_plus)
-                        wb_plus.save(out_name)
-                        fix_xlsx_for_trendyol(out_name)
-                        generated_files.append(os.path.join(timestamp_folder, "Plus_Komisyon_Tarifeleri.xlsx"))
+                            date_key = "Genel"
+                            if tarih_idx_plus:
+                                date_val = str(ws_plus.cell(r, tarih_idx_plus).value or "").strip()
+                                if date_val:
+                                    tr_map = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+                                    clean_d = date_val.translate(tr_map)
+                                    date_key = re.sub(r'[^\w\.\-]', '_', clean_d)
+                                    date_key = re.sub(r'_+', '_', date_key).strip('_')
+
+                            if not date_key:
+                                date_key = "Genel"
+
+                            if date_key not in date_groups:
+                                date_groups[date_key] = []
+                            date_groups[date_key].append(r)
+
+                    for date_key, keep_rows in date_groups.items():
+                        if keep_rows:
+                            wb_copy = openpyxl.load_workbook(F_PLUS)
+                            ws_copy = wb_copy.active
+                            for r in keep_rows:
+                                ust_lim = ws_copy.cell(r, ust_limit_idx).value
+                                barcode = str(ws_copy.cell(r, b_idx_plus).value or '').strip()
+                                row_info = row_by_barcode.get(barcode, {})
+                                selected_price = row_info.get('Plus Fiyatı (TL)')
+                                ws_copy.cell(r, fiyat_secim_idx).value = selected_price if selected_price is not None and not pd.isna(selected_price) else ust_lim
+                                ws_copy.cell(r, tarife_secim_idx).value = f"{gun_sayisi} Günlük Fiyat"
+
+                            safe_keep_rows(ws_copy, keep_rows)
+                            if date_key == "Genel":
+                                file_name = "Plus_Komisyon_Tarifeleri.xlsx"
+                            else:
+                                file_name = f"Plus_Komisyon_Tarifeleri_{date_key}.xlsx"
+
+                            out_name = os.path.join(run_output_dir, file_name)
+                            shrink_data_validations(ws_copy)
+                            wb_copy.save(out_name)
+                            fix_xlsx_for_trendyol(out_name)
+                            generated_files.append(os.path.join(timestamp_folder, file_name))
             except Exception:
                 return processing_error("Plus dosya")
 
@@ -859,8 +892,27 @@ def apply_campaign():
 
                         if keep_rows:
                             safe_keep_rows(ws_pe, keep_rows)
-                            safe_label = "".join(c for c in c_label if c.isalnum() or c in (' ', '_', '-')).strip()
-                            file_name = f"Plus_Ek_Indirim_{idx+1}_{safe_label}.xlsx"
+                            
+                            rate_val = pe_item.get('rate')
+                            r_str = ""
+                            if rate_val is not None:
+                                try:
+                                    r_num = float(rate_val)
+                                    r_str = f"{int(r_num)}" if r_num.is_integer() else f"{r_num}"
+                                except (ValueError, TypeError):
+                                    pass
+
+                            if not r_str:
+                                import re
+                                m = re.search(r'(\d+(?:[\.,]\d+)?)', str(c_label))
+                                if m:
+                                    r_str = m.group(1)
+
+                            if r_str:
+                                file_name = f"Trendyol_Plus_Musterilerine_Ozel_Ek_%{r_str}_Indirim.xlsx"
+                            else:
+                                file_name = f"Trendyol_Plus_Musterilerine_Ozel_Ek_Indirim_{idx+1}.xlsx"
+
                             out_name = os.path.join(run_output_dir, file_name)
                             shrink_data_validations(ws_pe)
                             wb_pe.save(out_name)
@@ -907,8 +959,38 @@ def apply_campaign():
                                 
                         if keep_rows:
                             safe_keep_rows(ws_kars, keep_rows)
-                            safe_label = re.sub(r'[^\w\-_]', '_', c_label)
-                            out_filename = f"Karsilamali_{safe_label}.xlsx"
+                            
+                            def format_num_clean(val):
+                                if val is None or val == "": return None
+                                try:
+                                    n = float(val)
+                                    return f"{int(n)}" if n.is_integer() else f"{n}"
+                                except (ValueError, TypeError):
+                                    return str(val).strip()
+
+                            min_p = format_num_clean(c_item.get('min_price'))
+                            disc = format_num_clean(c_item.get('discount_amount'))
+                            tp = format_num_clean(c_item.get('trendyol_percent'))
+
+                            if not min_p or not disc:
+                                import re
+                                m = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*(\d+(?:[\.,]\d+)?)\s*TL', c_label, re.IGNORECASE)
+                                if m:
+                                    min_p = min_p or format_num_clean(m.group(1))
+                                    disc = disc or format_num_clean(m.group(2))
+
+                            if min_p and disc:
+                                if tp and tp != '0':
+                                    out_filename = f"{min_p}_TL_Uzeri_{disc}_TL_Indirim_%{tp}_Trendyol_Karsilamali.xlsx"
+                                else:
+                                    out_filename = f"{min_p}_TL_Uzeri_{disc}_TL_Indirim_Trendyol_Karsilamali.xlsx"
+                            else:
+                                tr_map = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+                                clean_l = c_label.translate(tr_map)
+                                safe_l = re.sub(r'[^\w%]', '_', clean_l)
+                                safe_l = re.sub(r'_+', '_', safe_l).strip('_')
+                                out_filename = f"Karsilamali_{safe_l}.xlsx"
+
                             out_name = os.path.join(run_output_dir, out_filename)
                             shrink_data_validations(ws_kars)
                             wb_kars.save(out_name)

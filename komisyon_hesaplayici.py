@@ -76,23 +76,32 @@ ALLOWED_FOR_RECOMMENDATION = {'Avantajlı', 'Flaş', 'Plus'}
 
 def choose_campaigns_smart(current_net, candidates):
     """
-    candidates: (campaign_key, net_price, eff_price, rate, used_current_price=False)
+    candidates: (campaign_key, net_price, eff_price, rate, used_current_price=False, is_muhasebe=False)
     Önerilen (otomatik seçim) olarak SADECE Avantajlı, Flaş ve Plus kampanyaları değerlendirilir.
+    Eğer ürün Muhasebe listelerinde yer alıyorsa, öneri SADECE Muhasebe ile yüklenen kampanyalar arasından yapılır.
     """
-    candidates = selectable_campaigns(current_net, candidates)
-    if not candidates:
+    selectable = selectable_campaigns(current_net, candidates)
+    if not selectable:
         return 'Hiçbiri', 'Hiçbiri', ''
 
-    recommended_candidates = [c for c in candidates if c[0] in ALLOWED_FOR_RECOMMENDATION]
+    muhasebe_candidates = [
+        c for c in selectable 
+        if c[0] in ALLOWED_FOR_RECOMMENDATION and len(c) > 5 and c[5]
+    ]
 
-    if recommended_candidates:
-        best_cand = max(recommended_candidates, key=lambda x: x[1])
+    if muhasebe_candidates:
+        best_cand = max(muhasebe_candidates, key=lambda x: x[1])
         best_key = best_cand[0]
     else:
-        best_key = 'Hiçbiri'
+        recommended_candidates = [c for c in selectable if c[0] in ALLOWED_FOR_RECOMMENDATION]
+        if recommended_candidates:
+            best_cand = max(recommended_candidates, key=lambda x: x[1])
+            best_key = best_cand[0]
+        else:
+            best_key = 'Hiçbiri'
 
     applicable = []
-    for c in candidates:
+    for c in selectable:
         group = 'Plus Ek İndirim' if c[0].startswith('Plus Ek İndirim %') else c[0]
         if group not in applicable:
             applicable.append(group)
@@ -325,31 +334,59 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
             if rate_1 is not None:
                 net_1 = round(guncel_fiyat_calc - (guncel_fiyat_calc * (rate_1 / 100.0)), 2)
 
-        # Dip Fiyat tespiti (Tüm kaynaklardan en düşüğü)
-        dip_prices = []
-        if is_indirim and yeni_fiyat and yeni_fiyat > 0:
-            dip_prices.append(yeni_fiyat)
+        # Dip Fiyat tespiti (SADECE Satıcı İndirim Listesi ve Muhasebe Dip Limitleri)
+        common_dip = yeni_fiyat if (is_indirim and yeni_fiyat and yeni_fiyat > 0) else None
 
+        av_dip = None
+        av_dip_source = None
         if muh_av_row is not None:
             for col_name in ['YENİ TSF (FİYAT GÜNCELLE)', '1 YILDIZ ÜST FİYAT']:
                 if col_name in muh_av_row:
                     val = to_float(muh_av_row[col_name])
-                    if val and val > 0: dip_prices.append(val); break
+                    if val and val > 0: 
+                        av_dip = val
+                        av_dip_source = 'Avantajlı Muhasebe'
+                        break
 
+        flas_dip = None
+        flas_dip_source = None
         if muh_flas_row is not None:
             for col_name in ['Senin Belirlediğin Flaş Fiyatı', '24 Saat Fiyat']:
                 if col_name in muh_flas_row:
                     val = to_float(muh_flas_row[col_name])
-                    if val and val > 0: dip_prices.append(val); break
+                    if val and val > 0: 
+                        flas_dip = val
+                        flas_dip_source = 'Flaş Muhasebe'
+                        break
 
+        plus_dip = None
+        plus_dip_source = None
         if muh_plus_row is not None:
-            for col_name in ['Plus Fiyat Üst Limiti']:
+            for col_name in ['Plus Fiyat Üst Limiti', 'Plus Fiyat Seçimi']:
                 if col_name in muh_plus_row:
                     val = to_float(muh_plus_row[col_name])
-                    if val and val > 0: dip_prices.append(val); break
+                    if val and val > 0: 
+                        plus_dip = val
+                        plus_dip_source = 'Plus Muhasebe'
+                        break
 
-        has_explicit_dip = bool(dip_prices)
-        dip_price = min(dip_prices) if dip_prices else guncel_fiyat_calc
+        dip_details = []
+        if common_dip is not None:
+            dip_details.append({'type': 'İndirim Listesi', 'price': common_dip})
+        if plus_dip is not None and plus_dip_source:
+            dip_details.append({'type': plus_dip_source, 'price': plus_dip})
+        if flas_dip is not None and flas_dip_source:
+            dip_details.append({'type': flas_dip_source, 'price': flas_dip})
+        if av_dip is not None and av_dip_source:
+            dip_details.append({'type': av_dip_source, 'price': av_dip})
+
+        av_threshold = min([d for d in [common_dip, av_dip] if d is not None], default=None)
+        flas_threshold = min([d for d in [common_dip, flas_dip] if d is not None], default=None)
+        plus_threshold = min([d for d in [common_dip, plus_dip] if d is not None], default=None)
+        common_threshold = common_dip
+
+        all_dips = [d['price'] for d in dip_details]
+        min_dip_val = min(all_dips) if all_dips else None
 
         # Ürünün katılabileceği kampanyaların tespiti (eligible_campaigns)
         eligible_campaigns = ['Hiçbiri']
@@ -384,10 +421,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                 if rate_2 is not None:
                     net_2 = round(yeni_tsf - (yeni_tsf * (rate_2 / 100.0)), 2)
 
-                if not has_explicit_dip or yeni_tsf >= dip_price - 0.01:
+                if av_threshold is None or yeni_tsf >= av_threshold - 0.01:
                     eligible_campaigns.append('Avantajlı')
                     if net_2 is not None:
-                        smart_candidates.append(('Avantajlı', net_2, yeni_tsf, rate_2, yeni_tsf_is_fallback))
+                        smart_candidates.append(('Avantajlı', net_2, yeni_tsf, rate_2, yeni_tsf_is_fallback, muh_av_row is not None))
 
         # 2. Flaş Kampanya
         f_24_fiyat = None
@@ -418,10 +455,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                 if rate_3 is not None:
                     net_3 = round(f_24_fiyat - (f_24_fiyat * (rate_3 / 100.0)), 2)
 
-                if not has_explicit_dip or f_24_fiyat >= dip_price - 0.01:
+                if flas_threshold is None or f_24_fiyat >= flas_threshold - 0.01:
                     eligible_campaigns.append('Flaş')
                     if net_3 is not None:
-                        smart_candidates.append(('Flaş', net_3, f_24_fiyat, rate_3, f_24_fiyat_is_fallback))
+                        smart_candidates.append(('Flaş', net_3, f_24_fiyat, rate_3, f_24_fiyat_is_fallback, muh_flas_row is not None))
 
         # 3. Plus Kampanya
         plus_fiyat = None
@@ -454,10 +491,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                 if rate_4 is not None:
                     net_4 = round(plus_fiyat - (plus_fiyat * (rate_4 / 100.0)), 2)
 
-                if not has_explicit_dip or plus_fiyat >= dip_price - 0.01:
+                if plus_threshold is None or plus_fiyat >= plus_threshold - 0.01:
                     eligible_campaigns.append('Plus')
                     if net_4 is not None:
-                        smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback))
+                        smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
 
 
         # 4. Plus Ek İndirim Kampanyaları (Çoklu Yükleme Desteği)
@@ -485,7 +522,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                             disc_ratio = (1.0 - (pe_item['rate'] / 100.0)) if pe_item['rate'] > 0 else 1.0
                             calc_pe_price = round(pe_price * disc_ratio, 2)
                             pe_net = round(calc_pe_price - (pe_price * (pe_rate / 100.0)), 2)
-                            if not has_explicit_dip or calc_pe_price >= dip_price - 0.01:
+                            if common_threshold is None or calc_pe_price >= common_threshold - 0.01:
                                 eligible_campaigns.append(pe_item['label'])
                                 smart_candidates.append((pe_item['label'], pe_net, calc_pe_price, pe_rate, pe_price_is_fallback))
 
@@ -525,7 +562,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                         ('Plus Ek İndirim %10', net_5_10, plus_ek_fiyat_10, rate_5, plus_ek_fiyat_is_fallback),
                         ('Plus Ek İndirim %20', net_5_20, plus_ek_fiyat_20, rate_5, plus_ek_fiyat_is_fallback),
                     ):
-                        if not has_explicit_dip or candidate[2] >= dip_price - 0.01:
+                        if common_threshold is None or candidate[2] >= common_threshold - 0.01:
                             if candidate[0] not in eligible_campaigns:
                                 eligible_campaigns.append(candidate[0])
                             smart_candidates.append(candidate)
@@ -549,7 +586,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                 # Minimum tutar kontrolü (örn: 300 TL üzeri)
                 if c_price and c_price > 0:
                     eligible_campaigns.append(c_item['label'])
-                    if not has_explicit_dip or c_price >= dip_price - 0.01:
+                    if common_threshold is None or c_price >= common_threshold - 0.01:
                         c_rate = get_commission_rate(c_price, kom_row) if kom_row else None
                         if c_rate is None and gun_row:
                             try: c_rate = to_float(gun_row['Komisyon Oranı'])
@@ -586,9 +623,9 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
 
         guncel_fiyat_display = guncel_fiyat_calc
         discount_fields = build_discount_fields(
-            is_indirim or has_explicit_dip,
+            is_indirim or (len(dip_details) > 0),
             guncel_fiyat_display,
-            dip_price,
+            min_dip_val,
             piyasa_fiyat,
         )
 
@@ -599,12 +636,13 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
         results.append({
             'Barkod': b,
             'Stok Adedi': stok_val,
+            'dip_details': dip_details,
             'Plus Ek İndirim Eşleşme Durumu': 'Eşleşti' if match_plus_ek else 'Eşleşme Yok',
             'Plus Eşleşme Durumu': 'Eşleşti' if match_plus else 'Eşleşme Yok',
             'Avantajlı Ürün Eşleşme Durumu': 'Eşleşti' if match_av else 'Eşleşme Yok',
             'Flaş Ürün Eşleşme Durumu': 'Eşleşti' if match_fl else 'Eşleşme Yok',
             'Hem Avantajlı Hem Flaş': 'Evet' if (match_av and match_fl) else 'Hayır',
-            'İndirim Uygulanabilir': 'Evet' if is_indirim else 'Hayır',
+            'İndirim Uygulanabilir': 'Evet' if (common_dip is not None or len(dip_details) > 0) else 'Hayır',
             'Mevcut İndirim Oranı (%)': mevcut_indirim_orani,
             'Uygulanabilir Kampanyalar': uygulanabilir_kampanyalar,
             'Önerilen Kampanya': _rec_kampanya,
@@ -636,7 +674,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
             'Uygulanabilecek İndirim (%)': discount_fields['Uygulanabilecek İndirim (%)'],
             'Mevcut İndirim (TL)': discount_fields['Mevcut İndirim (TL)'],
             'Mevcut İndirim (%)': discount_fields['Mevcut İndirim (%)'],
-            'Düşülebilecek Dip Fiyat (TL)': dip_price,
+            'Düşülebilecek Dip Fiyat (TL)': min_dip_val,
             'eligible_campaigns': eligible_campaigns,
             'counter_evaluations': counter_evaluations,
         })

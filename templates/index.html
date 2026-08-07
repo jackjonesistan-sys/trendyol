@@ -570,8 +570,67 @@
             </div>
         </div>
 
+        <!-- DaisyUI Stats Component: Satır Sayıları ve İstatistikler -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4">
+            <!-- Stat 1: Toplam Ürün -->
+            <div class="stats bg-base-100 border border-base-200 shadow-2xs rounded-2xl p-0">
+                <div class="stat p-3.5 md:p-4">
+                    <div class="stat-figure text-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                    </div>
+                    <div class="stat-title text-[11px] font-bold opacity-70">Toplam Ürün Satırı</div>
+                    <div id="statTotalRows" class="stat-value text-xl md:text-2xl font-black text-primary">0</div>
+                    <div class="stat-desc text-[10px] font-medium opacity-60">Hesaplanan Tüm Ürünler</div>
+                </div>
+            </div>
+
+            <!-- Stat 2: Görünür / Filtrelenmiş -->
+            <div class="stats bg-base-100 border border-base-200 shadow-2xs rounded-2xl p-0">
+                <div class="stat p-3.5 md:p-4">
+                    <div class="stat-figure text-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                    </div>
+                    <div class="stat-title text-[11px] font-bold opacity-70">Filtrelenmiş Satır</div>
+                    <div id="statFilteredRows" class="stat-value text-xl md:text-2xl font-black text-info">0</div>
+                    <div class="stat-desc text-[10px] font-medium opacity-60">Şu An Tabloda Listelenen</div>
+                </div>
+            </div>
+
+            <!-- Stat 3: Seçili Satır -->
+            <div class="stats bg-base-100 border border-base-200 shadow-2xs rounded-2xl p-0">
+                <div class="stat p-3.5 md:p-4">
+                    <div class="stat-figure text-success">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="stat-title text-[11px] font-bold opacity-70">Seçili Satır Sayısı</div>
+                    <div id="statCheckedRows" class="stat-value text-xl md:text-2xl font-black text-success">0</div>
+                    <div class="stat-desc text-[10px] font-medium opacity-60">İşaretlenmiş Ürünler</div>
+                </div>
+            </div>
+
+            <!-- Stat 4: Stok 0 Ürünler -->
+            <div class="stats bg-base-100 border border-base-200 shadow-2xs rounded-2xl p-0">
+                <div class="stat p-3.5 md:p-4">
+                    <div class="stat-figure text-warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div class="stat-title text-[11px] font-bold opacity-70">Stok 0 Ürünler</div>
+                    <div id="statZeroStockRows" class="stat-value text-xl md:text-2xl font-black text-warning">0</div>
+                    <div id="statZeroStockDesc" class="stat-desc text-[10px] font-medium opacity-60">Tabloda Gizlendi</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Data Table Card (ÇİFT TARAFLI SABİT KONTROL ÇUBUKLARI - SIFIR KAYMA) -->
-        <div class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden rounded-2xl w-full my-6">
+        <div class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden rounded-2xl w-full mb-6">
             <!-- ÜST KONTROL ÇUBUĞU (SABİT) -->
             <div id="tableTopHeaderControls" class="p-4 bg-base-100 border-b border-base-200">
                 <!-- Dynamic Dual Controls Rendered Here -->
@@ -584,12 +643,14 @@
                     <thead
                         class="bg-base-200/80 text-base-content text-xs font-bold uppercase tracking-wider border-b border-base-300">
                         <tr>
+                            <th class="no-sort text-center w-10 text-[11px] opacity-70">#</th>
                             <th class="no-sort" style="width:35px; text-align:center;"><input type="checkbox" id="selectAll"
                                     class="checkbox checkbox-xs checkbox-primary" onclick="toggleAll(this)"
                                     title="Tümünü Seç"></th>
                             {% for column in report_columns %}<th>{{ column }}</th>{% endfor %}
                         </tr>
                         <tr class="filters bg-base-200/40">
+                            <th></th>
                             <th></th>
                             {% for column in report_columns %}<th data-report-column="{{ column }}"></th>{% endfor %}
                         </tr>
@@ -764,7 +825,7 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.needs_calculation) {
-                        $('#table-body').html(`<tr><td colspan="${reportColumns.length + 1}" style="text-align:center; padding:30px; font-size: 16px; color: #e74c3c;">
+                        $('#table-body').html(`<tr><td colspan="${reportColumns.length + 2}" style="text-align:center; padding:30px; font-size: 16px; color: #e74c3c;">
                             <strong>${data.message}</strong>
                         </td></tr>`);
                         return;
@@ -781,6 +842,7 @@
                     }));
                     renderTable();
                     updateBulkCampaignOptions();
+                    updateTableStats();
                     if (data.length > 0) {
                         const hasKars = data.some(r => r['Karşılamalı Kampanya Eşleşme Durumu'] === 'Eşleşti');
                         toggleKarsilamaliOptions(hasKars);
@@ -891,7 +953,7 @@
                 selections: selections,
                 ignore_zero_stock: ignoreZeroStockChecked,
                 visibleColumns: reportColumns.filter((column, index) =>
-                    !dataTable || dataTable.column(index + 1).visible()
+                    !dataTable || dataTable.column(index + 2).visible()
                 )
             };
 
@@ -969,7 +1031,7 @@
             if (container.length === 0) return;
             container.empty();
             reportColumns.forEach((name, idx) => {
-                const actualColIdx = idx + 1;
+                const actualColIdx = idx + 2;
                 const isVisible = dataTable ? dataTable.column(actualColIdx).visible() : true;
                 const checkboxHtml = `
                     <label class="flex items-center gap-2 py-1 px-1.5 hover:bg-base-200 rounded-lg cursor-pointer text-base-content">
@@ -1404,6 +1466,73 @@
             }
         }
 
+        function updateTableStats() {
+            if (!tableData || !tableData.length) {
+                $('#statTotalRows').text('0');
+                $('#statFilteredRows').text('0');
+                $('#statCheckedRows').text('0');
+                $('#statZeroStockRows').text('0');
+                return;
+            }
+
+            const totalCount = tableData.length;
+
+            let zeroStockCount = 0;
+            let checkedCount = 0;
+            tableData.forEach(row => {
+                const stok = asNumber(row['Stok Adedi']);
+                if (stok !== null && stok === 0) zeroStockCount++;
+                if (row.checked) checkedCount++;
+            });
+
+            let filteredCount = totalCount;
+            if (dataTable) {
+                filteredCount = dataTable.rows({ search: 'applied' }).data().length;
+            }
+
+            $('#statTotalRows').text(totalCount.toLocaleString('tr-TR'));
+            $('#statFilteredRows').text(filteredCount.toLocaleString('tr-TR'));
+            $('#statCheckedRows').text(checkedCount.toLocaleString('tr-TR'));
+            $('#statZeroStockRows').text(zeroStockCount.toLocaleString('tr-TR'));
+
+            if (ignoreZeroStockChecked) {
+                $('#statZeroStockDesc').text('Tabloda Gizlendi').addClass('text-warning').removeClass('text-base-content/50');
+            } else {
+                $('#statZeroStockDesc').text('Tabloda Gösteriliyor').removeClass('text-warning').addClass('text-base-content/50');
+            }
+        }
+
+        function dipPriceBadgesHtml(row) {
+            const dipDetails = Array.isArray(row.dip_details) ? row.dip_details : [];
+            if (!dipDetails.length) {
+                const eligible = row['İndirim Uygulanabilir'] === 'Evet';
+                const singleDip = eligible ? asNumber(row['Düşülebilecek Dip Fiyat (TL)']) : null;
+                if (singleDip !== null) {
+                    return `<span class="font-semibold text-xs text-base-content/90">${singleDip.toFixed(2)} TL</span>`;
+                }
+                return '<span class="text-[10px] text-base-content/40">-</span>';
+            }
+
+            const badgeColorMap = {
+                'İndirim Listesi': 'badge-outline border-base-300 text-base-content/80',
+                'Plus Muhasebe': 'badge-primary badge-outline font-semibold',
+                'Plus Kampanyası': 'badge-primary badge-ghost font-semibold',
+                'Flaş Muhasebe': 'badge-warning badge-outline font-semibold',
+                'Flaş Kampanyası': 'badge-warning badge-ghost font-semibold',
+                'Avantajlı Muhasebe': 'badge-info badge-outline font-semibold',
+                'Avantajlı Kampanyası': 'badge-info badge-ghost font-semibold'
+            };
+
+            const badges = dipDetails.map(item => {
+                const typeLabel = escapeHtml(item.type || 'Dip');
+                const priceVal = typeof item.price === 'number' ? item.price.toFixed(2) : escapeHtml(item.price);
+                const colorClass = badgeColorMap[item.type] || 'badge-ghost';
+                return `<span class="badge ${colorClass} badge-xs text-[10px] py-1.5 px-2 rounded-md whitespace-nowrap">${typeLabel}: ${priceVal} TL</span>`;
+            }).join(' ');
+
+            return `<div class="flex flex-wrap gap-1 max-w-[210px]">${badges}</div>`;
+        }
+
         function campaignSelectionHtml(row) {
             const rowIndex = row._index;
             const eligible = Array.isArray(row.eligible_campaigns) ? row.eligible_campaigns : ['Hiçbiri'];
@@ -1437,17 +1566,31 @@
                 'Uygulanan Kampanya Fiyat', 'Uygulanan Kampanya Net', 'Uygulanan Kampanya Komisyon'
             ]);
             const hiddenTargets = reportColumns
-                .map((column, index) => defaultHidden.has(column) ? index + 1 : null)
+                .map((column, index) => defaultHidden.has(column) ? index + 2 : null)
                 .filter(index => index !== null);
-            const columns = [{
-                data: null,
-                orderable: false,
-                render: function (data, type, row) {
-                    return type === 'display'
-                        ? `<input type="checkbox" class="checkbox checkbox-xs row-checkbox checkbox-primary" ${row.checked ? 'checked' : ''} onchange="updateCheck(${row._index}, this.checked)">`
-                        : row.checked;
+            const columns = [
+                {
+                    data: null,
+                    orderable: false,
+                    className: 'text-center font-mono opacity-80',
+                    render: function (data, type, row, meta) {
+                        const seqNo = meta.row + meta.settings._iDisplayStart + 1;
+                        if (type === 'display') {
+                            return `<span class="badge badge-ghost badge-xs font-mono font-semibold text-base-content/70 px-1.5">${seqNo}</span>`;
+                        }
+                        return seqNo;
+                    }
+                },
+                {
+                    data: null,
+                    orderable: false,
+                    render: function (data, type, row) {
+                        return type === 'display'
+                            ? `<input type="checkbox" class="checkbox checkbox-xs row-checkbox checkbox-primary" ${row.checked ? 'checked' : ''} onchange="updateCheck(${row._index}, this.checked)">`
+                            : row.checked;
+                    }
                 }
-            }].concat(reportColumns.map(column => ({
+            ].concat(reportColumns.map(column => ({
                 data: null,
                 orderable: true,
                 className: column === 'Hangisi Karlı?' ? 'highlight text-center font-semibold' : '',
@@ -1455,6 +1598,9 @@
                     const reportRow = buildReportRow(row);
                     if (column === 'Uygulanan Kampanya' && type === 'display') {
                         return campaignSelectionHtml(row);
+                    }
+                    if (column === 'Düşülebilecek Dip Fiyat (TL)' && type === 'display') {
+                        return dipPriceBadgesHtml(row);
                     }
                     const value = reportRow[column];
                     if (type === 'sort' || type === 'filter') return value == null ? '' : value;
@@ -1618,7 +1764,7 @@
                 deferRender: true,
                 orderCellsTop: true,
                 columnDefs: [
-                    { targets: 0, orderable: false, searchable: false },
+                    { targets: [0, 1], orderable: false, searchable: false },
                     { targets: hiddenTargets, visible: false }
                 ],
                 dom: 'rt',
@@ -1642,7 +1788,7 @@
 
                     const filterColumnNames = ['Uygulanan Kampanya', 'Hangisi Karlı?'];
                     filterColumnNames.forEach(columnName => {
-                        const columnIndex = reportColumns.indexOf(columnName) + 1;
+                        const columnIndex = reportColumns.indexOf(columnName) + 2;
                         const column = this.api().column(columnIndex);
                         const filterCell = $('.filters th').filter(
                             (_, th) => th.dataset.reportColumn === columnName
@@ -1665,6 +1811,16 @@
                 },
                 drawCallback: function () {
                     renderCustomPagination();
+                    updateTableStats();
+
+                    const api = this.api();
+                    if (api) {
+                        const info = api.page.info();
+                        api.column(0, { page: 'current' }).nodes().each(function (cell, i) {
+                            const seqNo = info.start + i + 1;
+                            cell.innerHTML = `<span class="badge badge-ghost badge-xs font-mono font-semibold text-base-content/70 px-1.5">${seqNo}</span>`;
+                        });
+                    }
                 }
             });
         }
@@ -1683,15 +1839,21 @@
             } else {
                 tableData.forEach(row => { row.checked = isChecked; });
             }
+            updateTableStats();
         }
 
-        function updateCheck(index, checked) {
-            tableData[index].checked = checked;
+        function updateCheck(index, isChecked) {
+            if (tableData[index]) {
+                tableData[index].checked = isChecked;
+            }
+            updateTableStats();
         }
+
+
 
         function resetUygulananKampanyaFilter() {
             if (dataTable) {
-                const columnIndex = reportColumns.indexOf('Uygulanan Kampanya') + 1;
+                const columnIndex = reportColumns.indexOf('Uygulanan Kampanya') + 2;
                 if (columnIndex > 0) {
                     dataTable.column(columnIndex).search('');
                     $('.filters th[data-report-column="Uygulanan Kampanya"] select').val('');
