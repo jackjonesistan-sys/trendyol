@@ -8,6 +8,16 @@ class TemplateContractTests(unittest.TestCase):
         cls.template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(
             encoding="utf-8"
         )
+import unittest
+from pathlib import Path
+
+
+class TemplateContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(
+            encoding="utf-8"
+        )
 
     def test_uploaded_file_status_is_visible_for_each_input(self):
         self.assertIn('id="upload_status_{{ key }}"', self.template)
@@ -15,7 +25,7 @@ class TemplateContractTests(unittest.TestCase):
 
     def test_campaign_and_profit_filters_are_restored(self):
         self.assertIn(
-            "const filterColumnNames = ['Uygulanan Kampanya', 'Hangisi Karlı?'];",
+            "const filterColumnNames = ['Uygulanan Kampanya', 'Ekstra Kampanya', 'Hangisi Karlı?'];",
             self.template,
         )
         self.assertIn('data-report-column="{{ column }}"', self.template)
@@ -27,7 +37,7 @@ class TemplateContractTests(unittest.TestCase):
             self.template,
         )
         self.assertIn("let selectedCount = 0;", self.template)
-        self.assertIn("${selectedCount} ürüne en yüksek netli kampanya seçimi uygulandı.", self.template)
+        self.assertIn("ürüne önerilen", self.template)
 
     def test_template_data_and_missing_numbers_are_safe(self):
         self.assertIn('id="report-columns-data" type="application/json"', self.template)
@@ -45,7 +55,7 @@ class TemplateContractTests(unittest.TestCase):
         self.assertEqual(self.template.count("function updateSelection("), 1)
         self.assertEqual(self.template.count("function applyBulkAction("), 1)
         self.assertIn(
-            "const counter = row.counter_evaluations?.[selection];", self.template
+            "const counter = row.counter_evaluations?.[extraSel];", self.template
         )
 
 

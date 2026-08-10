@@ -72,33 +72,36 @@ def selectable_campaigns(current_net, candidates):
 
 
 ALLOWED_FOR_RECOMMENDATION = {'Avantajlı', 'Flaş', 'Plus'}
+MAIN_CAMPAIGN_KEYS = {'Avantajlı', 'Flaş', 'Plus'}
 
 
 def choose_campaigns_smart(current_net, candidates):
     """
     candidates: (campaign_key, net_price, eff_price, rate, used_current_price=False, is_muhasebe=False)
-    Önerilen (otomatik seçim) olarak SADECE Avantajlı, Flaş ve Plus kampanyaları değerlendirilir.
-    Eğer ürün Muhasebe listelerinde yer alıyorsa, öneri SADECE Muhasebe ile yüklenen kampanyalar arasından yapılır.
+    
+    Önerilen Kampanya (Ana):
+      Dip fiyatı geçebilen Ana kampanyalar ('Avantajlı', 'Flaş', 'Plus') arasından 
+      fiyatı dip fiyata en yakın olanı seçilir.
+      
+    Önerilen Ekstra Kampanya:
+      Dip fiyatı geçebilen Ekstra kampanyalar (Karşılamalı veya Plus Ek İndirim) arasından 
+      fiyatı dip fiyata en yakın olanı seçilir.
     """
     selectable = selectable_campaigns(current_net, candidates)
     if not selectable:
-        return 'Hiçbiri', 'Hiçbiri', ''
+        return 'Hiçbiri', 'Hiçbiri', '', 'Hiçbiri', 'Hiçbiri'
 
-    muhasebe_candidates = [
-        c for c in selectable 
-        if c[0] in ALLOWED_FOR_RECOMMENDATION and len(c) > 5 and c[5]
-    ]
-
-    if muhasebe_candidates:
-        best_cand = max(muhasebe_candidates, key=lambda x: x[1])
-        best_key = best_cand[0]
+    main_selectable = [c for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
+    if main_selectable:
+        best_main = min(main_selectable, key=lambda x: (x[2], -x[1]))[0]
     else:
-        recommended_candidates = [c for c in selectable if c[0] in ALLOWED_FOR_RECOMMENDATION]
-        if recommended_candidates:
-            best_cand = max(recommended_candidates, key=lambda x: x[1])
-            best_key = best_cand[0]
-        else:
-            best_key = 'Hiçbiri'
+        best_main = 'Hiçbiri'
+
+    extra_selectable = [c for c in selectable if c[0] not in MAIN_CAMPAIGN_KEYS]
+    if extra_selectable:
+        best_extra = min(extra_selectable, key=lambda x: (x[2], -x[1]))[0]
+    else:
+        best_extra = 'Hiçbiri'
 
     applicable = []
     for c in selectable:
@@ -106,7 +109,13 @@ def choose_campaigns_smart(current_net, candidates):
         if group not in applicable:
             applicable.append(group)
 
-    return best_key, CAMPAIGN_LABELS.get(best_key, best_key), ', '.join(applicable)
+    return (
+        best_main, 
+        CAMPAIGN_LABELS.get(best_main, best_main), 
+        ', '.join(applicable), 
+        best_extra, 
+        CAMPAIGN_LABELS.get(best_extra, best_extra)
+    )
 
 
 choose_campaigns = choose_campaigns_smart
@@ -139,7 +148,7 @@ def build_discount_fields(is_eligible, current_price, dip_price, market_price):
     }
 
 
-def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsilamali_config=None, output_dir=None, user_selections=None):
+def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None):
     required = ('commission', 'current')
     missing = [key for key in required if not input_files.get(key)]
     if missing:
@@ -153,6 +162,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
     counter_items = []
     if counter_files and isinstance(counter_files, list):
         for idx, item in enumerate(counter_files):
+            if item.get('enabled', True) is False:
+                continue
             try:
                 c_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
                 if not c_df.empty and 'Barkod' in c_df.columns:
@@ -195,6 +206,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
     plus_extra_items = []
     if plus_extra_files and isinstance(plus_extra_files, list):
         for idx, item in enumerate(plus_extra_files):
+            if item.get('enabled', True) is False:
+                continue
             try:
                 pe_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
                 if not pe_df.empty and 'Barkod' in pe_df.columns:
@@ -224,6 +237,35 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                     })
         except Exception: pass
 
+    # Parse multi coupon files configuration if provided
+    coupon_items = []
+    if coupon_files and isinstance(coupon_files, list):
+        for idx, item in enumerate(coupon_files):
+            if item.get('enabled', True) is False:
+                continue
+            try:
+                cp_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
+                if not cp_df.empty and 'Barkod' in cp_df.columns:
+                    cp_df['BARKOD_CLN'] = cp_df['Barkod'].astype(str).str.strip()
+                    item_dict = cp_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
+                    
+                    min_p = float(item.get('min_price', 0))
+                    disc_amt = float(item.get('discount_amount', 0))
+                    tr_pct = float(item.get('trendyol_percent', 0))
+                    min_p_str = f"{int(min_p)}" if min_p.is_integer() else f"{min_p}"
+                    disc_str = f"{int(disc_amt)}" if disc_amt.is_integer() else f"{disc_amt}"
+                    label = item.get('label') or f"{min_p_str} TL Üzerine {disc_str} TL Kupon - Trendyol Plus Müşterilerine Özel"
+                    
+                    coupon_items.append({
+                        'id': item.get('id') or f"coupon_{idx+1}",
+                        'label': label,
+                        'min_price': min_p,
+                        'discount_amount': disc_amt,
+                        'trendyol_percent': tr_pct,
+                        'dict': item_dict
+                    })
+            except Exception: pass
+
     try:
         df_tr = pd.read_excel(input_files['discount'])
         df_kom = pd.read_excel(input_files['commission'])
@@ -239,7 +281,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
         return {"success": False, "message": f"Excel dosyaları okunurken hata oluştu: {str(e)}"}
 
     df_tr['BARKOD_CLN'] = df_tr['BARKOD'].astype(str).str.strip()
-    indirimli = df_tr[df_tr['Durum'].astype(str).str.contains('ndirim', case=False, na=False)]
+    if 'Durum' in df_tr.columns:
+        indirimli = df_tr[df_tr['Durum'].astype(str).str.contains('ndirim', case=False, na=False)]
+    else:
+        indirimli = df_tr
     tr_barcodes = indirimli['BARKOD_CLN'].unique()
 
     df_gun['BARKOD_CLN'] = df_gun['Barkod'].astype(str).str.strip()
@@ -592,34 +637,137 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
                             try: c_rate = to_float(gun_row['Komisyon Oranı'])
                             except: pass
                         if c_rate is not None:
-                            seller_disc = c_item['discount_amount'] * (1.0 - (c_item['trendyol_percent'] / 100.0))
+                            disc_type = c_item.get('discount_type') or c_item.get('discount_unit') or 'TL'
+                            disc_val = c_item.get('discount_amount', 0.0)
+                            if disc_type == '%':
+                                total_discount = round(c_price * (disc_val / 100.0), 2)
+                            else:
+                                total_discount = disc_val
+                            
+                            seller_disc = round(total_discount * (1.0 - (c_item['trendyol_percent'] / 100.0)), 2)
                             c_net = round(c_price - (c_price * (c_rate / 100.0)) - seller_disc, 2)
                             counter_evaluations[c_item['label']] = {
                                 'price': c_price,
                                 'rate': c_rate,
                                 'net': c_net,
                                 'seller_disc': seller_disc,
+                                'disc_type': disc_type,
+                                'disc_val': disc_val,
+                                'trendyol_percent': c_item.get('trendyol_percent', 0.0),
                             }
                             smart_candidates.append((c_item['label'], c_net, c_price, c_rate, c_price_is_fallback))
 
-        selectable = selectable_campaigns(net_1, smart_candidates)
-        eligible_campaigns = ['Hiçbiri']
-        for candidate in selectable:
-            if candidate[0] not in eligible_campaigns:
-                eligible_campaigns.append(candidate[0])
+        if coupon_items:
+            for cp_item in coupon_items:
+                cp_dict = cp_item['dict']
+                cp_row = cp_dict.get(b)
+                if cp_row is not None:
+                    cp_price = None
+                    cp_price_is_fallback = False
+                    for cp_col in ['Mevcut Satış Fiyatı', 'Maksimum Girebileceğin Fiyat', 'Kampanyalı Satış Fiyatı']:
+                        if cp_col in cp_row:
+                            val = to_float(cp_row[cp_col])
+                            if val and val > 0: cp_price = val; break
+                    if cp_price is None and guncel_fiyat_calc and guncel_fiyat_calc > 0:
+                        cp_price = guncel_fiyat_calc
+                        cp_price_is_fallback = True
+                    
+                    if cp_price and cp_price > 0:
+                        eligible_campaigns.append(cp_item['label'])
+                        if common_threshold is None or cp_price >= common_threshold - 0.01:
+                            cp_rate = get_commission_rate(cp_price, kom_row) if kom_row else None
+                            if cp_rate is None and gun_row:
+                                try: cp_rate = to_float(gun_row['Komisyon Oranı'])
+                                except: pass
+                            if cp_rate is not None:
+                                disc_type = 'TL'
+                                disc_val = cp_item.get('discount_amount', 0.0)
+                                total_discount = disc_val
+                                seller_disc = round(total_discount * (1.0 - (cp_item['trendyol_percent'] / 100.0)), 2)
+                                cp_net = round(cp_price - (cp_price * (cp_rate / 100.0)) - seller_disc, 2)
+                                counter_evaluations[cp_item['label']] = {
+                                    'price': cp_price,
+                                    'rate': cp_rate,
+                                    'net': cp_net,
+                                    'seller_disc': seller_disc,
+                                    'disc_type': disc_type,
+                                    'disc_val': disc_val,
+                                    'trendyol_percent': cp_item.get('trendyol_percent', 0.0),
+                                }
+                                smart_candidates.append((cp_item['label'], cp_net, cp_price, cp_rate, cp_price_is_fallback))
 
-        _rec_kampanya, daha_karli_kampanya, uygulanabilir_kampanyalar = choose_campaigns_smart(
-            net_1, selectable
-        )
+        selectable = selectable_campaigns(net_1, smart_candidates)
+
+        all_matching_main_campaigns = ['Hiçbiri']
+        if match_av and yeni_tsf and (not yeni_tsf_is_fallback or (net_2 is not None and net_2 > net_1)):
+            if 'Avantajlı' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Avantajlı')
+        if match_fl and f_24_fiyat and (not f_24_fiyat_is_fallback or (net_3 is not None and net_3 > net_1)):
+            if 'Flaş' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Flaş')
+        if match_plus and plus_fiyat and (not plus_fiyat_is_fallback or (net_4 is not None and net_4 > net_1)):
+            if 'Plus' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Plus')
+
+        eligible_main_campaigns = ['Hiçbiri'] + [c[0] for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
+
+        all_matching_extra_campaigns = ['Hiçbiri']
+        if match_plus_ek and plus_ek_fiyat and (not plus_ek_fiyat_is_fallback or (net_5 is not None and net_5 > net_1)):
+            for c_name in ('Plus Ek İndirim %5', 'Plus Ek İndirim %10', 'Plus Ek İndirim %20'):
+                if c_name not in all_matching_extra_campaigns:
+                    all_matching_extra_campaigns.append(c_name)
+        if plus_extra_items:
+            for pe_item in plus_extra_items:
+                if pe_item['dict'].get(b) is not None:
+                    if pe_item['label'] not in all_matching_extra_campaigns:
+                        all_matching_extra_campaigns.append(pe_item['label'])
+        if coupon_items:
+            for cp_item in coupon_items:
+                if cp_item['dict'].get(b) is not None:
+                    if cp_item['label'] not in all_matching_extra_campaigns:
+                        all_matching_extra_campaigns.append(cp_item['label'])
+        for c_item in counter_items:
+            if c_item['dict'].get(b) is not None:
+                if c_item['label'] not in all_matching_extra_campaigns:
+                    all_matching_extra_campaigns.append(c_item['label'])
+
+        eligible_extra_campaigns = ['Hiçbiri'] + [c[0] for c in selectable if c[0] not in MAIN_CAMPAIGN_KEYS]
+
+        all_matching_campaigns = list(all_matching_main_campaigns)
+        for c_name in all_matching_extra_campaigns:
+            if c_name not in all_matching_campaigns:
+                all_matching_campaigns.append(c_name)
+
+        eligible_campaigns = list(eligible_main_campaigns)
+        for c_name in eligible_extra_campaigns:
+            if c_name not in eligible_campaigns:
+                eligible_campaigns.append(c_name)
+
+        rec_res = choose_campaigns_smart(net_1, selectable)
+        if len(rec_res) == 5:
+            _rec_kampanya, _rec_kampanya_display, uygulanabilir_kampanyalar, _rec_extra, _rec_extra_display = rec_res
+        else:
+            _rec_kampanya, _rec_kampanya_display, uygulanabilir_kampanyalar = rec_res
+            _rec_extra = 'Hiçbiri'
 
         if user_selections is not None and isinstance(user_selections, dict) and b in user_selections:
-            saved_sel = user_selections[b]
-            if saved_sel and (saved_sel == 'Hiçbiri' or any(c[0] == saved_sel for c in selectable)):
-                ilk_kampanya = saved_sel
+            saved_val = user_selections[b]
+            if isinstance(saved_val, dict):
+                saved_main = saved_val.get('main', 'Hiçbiri')
+                saved_extra = saved_val.get('extra', 'Hiçbiri')
+                ilk_main = saved_main if (saved_main == 'Hiçbiri' or saved_main in all_matching_main_campaigns) else 'Hiçbiri'
+                ilk_extra = saved_extra if (saved_extra == 'Hiçbiri' or saved_extra in all_matching_extra_campaigns) else 'Hiçbiri'
             else:
-                ilk_kampanya = 'Hiçbiri'
+                saved_str = str(saved_val)
+                if saved_str in all_matching_main_campaigns:
+                    ilk_main = saved_str
+                    ilk_extra = 'Hiçbiri'
+                elif saved_str in all_matching_extra_campaigns:
+                    ilk_main = 'Hiçbiri'
+                    ilk_extra = saved_str
+                else:
+                    ilk_main = 'Hiçbiri'
+                    ilk_extra = 'Hiçbiri'
         else:
-            ilk_kampanya = 'Hiçbiri'
+            ilk_main = 'Hiçbiri'
+            ilk_extra = 'Hiçbiri'
 
         guncel_fiyat_display = guncel_fiyat_calc
         discount_fields = build_discount_fields(
@@ -646,8 +794,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
             'Mevcut İndirim Oranı (%)': mevcut_indirim_orani,
             'Uygulanabilir Kampanyalar': uygulanabilir_kampanyalar,
             'Önerilen Kampanya': _rec_kampanya,
-            'İlk Kampanya Seçimi': ilk_kampanya,
-            'Hangisi Daha Karlı?': daha_karli_kampanya,
+            'Önerilen Ekstra Kampanya': _rec_extra,
+            'İlk Kampanya Seçimi': ilk_main,
+            'İlk Ekstra Kampanya Seçimi': ilk_extra,
+            'Hangisi Daha Karlı?': 'Hiçbiri',
             'Karlılık Farkı (%)': '',
             'Güncel Ürün Fiyatı (TL)': guncel_fiyat_display,
             'Güncel Ürün Komisyon (%)': rate_1,
@@ -675,14 +825,20 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, karsil
             'Mevcut İndirim (TL)': discount_fields['Mevcut İndirim (TL)'],
             'Mevcut İndirim (%)': discount_fields['Mevcut İndirim (%)'],
             'Düşülebilecek Dip Fiyat (TL)': min_dip_val,
+            'eligible_main_campaigns': eligible_main_campaigns,
+            'all_matching_main_campaigns': all_matching_main_campaigns,
+            'eligible_extra_campaigns': eligible_extra_campaigns,
+            'all_matching_extra_campaigns': all_matching_extra_campaigns,
             'eligible_campaigns': eligible_campaigns,
+            'all_matching_campaigns': all_matching_campaigns,
             'counter_evaluations': counter_evaluations,
         })
 
     # Save to Excel
+    out_file = os.path.join(output_dir, 'Kampanya_Hesaplama_Sonuclari.xlsx') if output_dir else 'Kampanya_Hesaplama_Sonuclari.xlsx'
     try:
         out_df = pd.DataFrame(results)
-        excel_cols = [c for c in out_df.columns if c not in ('eligible_campaigns', 'counter_evaluations')]
+        excel_cols = [c for c in out_df.columns if c not in ('eligible_campaigns', 'counter_evaluations', 'eligible_main_campaigns', 'all_matching_main_campaigns', 'eligible_extra_campaigns', 'all_matching_extra_campaigns')]
         out_df[excel_cols].to_excel(out_file, index=False)
     except Exception as e:
         print("Excel kaydetme uyarısı:", e)

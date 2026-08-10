@@ -49,6 +49,7 @@ class ReportingTests(unittest.TestCase):
                 "Karşılamalı Kampanya Fiyat (TL)",
                 "Karşılamalı Kampanya Net",
                 "Uygulanan Kampanya",
+                "Ekstra Kampanya",
                 "Hangisi Karlı?",
                 "Düşülebilecek Dip Fiyat (TL)",
                 "Uygulanan Kampanya Fiyat",
@@ -90,7 +91,7 @@ class ReportingTests(unittest.TestCase):
         report = app.build_report_row(
             {
                 "Barkod": "A1",
-                "userSelection": "Plus Ek İndirim %10",
+                "userExtraSelection": "Plus Ek İndirim %10",
                 "İndirim Uygulanabilir": "Hayır",
                 "Güncel Ürün Fiyatı (TL)": 100,
                 "Güncel Ürün Kalan Net (TL)": 90,

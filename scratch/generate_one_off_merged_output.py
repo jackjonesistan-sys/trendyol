@@ -3,21 +3,21 @@ import re
 import pandas as pd
 import numpy as np
 
-# File paths
-f_dip = r"Girdiler/muhasebe/7 ağustos/DİP FİYATLAR.xlsx"
-f_damp = r"Girdiler/muhasebe/7 ağustos/Trendyol Damping.xlsx"
-f_curr = r"Girdiler/Yuklenen/current.xlsx"
+# Updated File paths (10 Ağustos catalog + Trendyol Damping_güncellendi + Dip Fiyatlar + İndirim Listesi)
+f_curr = r"Girdiler/10agustos/Ürün Listesi.xlsx"
 f_ind = r"Girdiler/İndirim Uygulanabilecek Ürünler.xlsx"
+f_damp = r"Girdiler/muhasebe/7 ağustos/Trendyol Damping_güncellendi.xlsx"
+f_dip = r"Girdiler/muhasebe/7 ağustos/DİP FİYATLAR.xlsx"
 
 out_dir = r"Çıktılar"
 os.makedirs(out_dir, exist_ok=True)
 out_excel_path = os.path.join(out_dir, "Tek_Seferlik_Birlestirilmis_Indirim_Listesi.xlsx")
 
 # 1. Read files
-df_dip = pd.read_excel(f_dip)
-df_damp = pd.read_excel(f_damp)
 df_curr = pd.read_excel(f_curr)
 df_ind = pd.read_excel(f_ind)
+df_damp = pd.read_excel(f_damp)
+df_dip = pd.read_excel(f_dip)
 
 # 2. Build current price lookup
 curr_col = [c for c in df_curr.columns if 'Satılacak' in c or 'Satilacak' in c][0]
@@ -38,7 +38,7 @@ for _, r in df_curr.iterrows():
 # bc -> list of dicts: {'source': str, 'yeni': float, 'eski': float}
 bc_entries = {}
 
-# Process Trendyol Damping
+# Process Trendyol Damping Güncellendi
 for _, r in df_damp.iterrows():
     bc = str(r.get('BARKOD', '')).strip()
     yeni = r.get('YENİ Fiyat')

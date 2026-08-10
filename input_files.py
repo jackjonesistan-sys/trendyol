@@ -13,7 +13,7 @@ INPUT_SPECS = {
         "label": "İndirim Uygulanabilecek Ürünler",
         "required": False,
         "filename": "discount.xlsx",
-        "columns": {"BARKOD", "Eski Fiyat", "YENİ Fiyat", "Durum"},
+        "columns": {"BARKOD", "Eski Fiyat", "YENİ Fiyat"},
     },
     "commission": {
         "label": "Ürün Komisyon Tarifeleri",
@@ -253,14 +253,34 @@ def save_upload_set(files, upload_dir, manifest_path):
 import re
 
 def parse_counter_filename(filename):
-    pattern = r'(\d+)\s*[-_]?tl[-_]?uzeri\s*[-_]?(\d+)\s*[-_]?tl[-_]?indirim\s*[-_]?(\d+)\s*[-_]?trendyol'
-    m = re.search(pattern, str(filename), re.IGNORECASE)
-    if m:
-        try:
-            return float(m.group(1)), float(m.group(2)), float(m.group(3))
-        except (ValueError, TypeError):
-            pass
-    return 0.0, 0.0, 0.0
+    fn_str = str(filename)
+    min_p = 0.0
+    m_min = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?uzeri', fn_str, re.IGNORECASE)
+    if m_min:
+        try: min_p = float(m_min.group(1).replace(',', '.'))
+        except (ValueError, TypeError): pass
+
+    disc = 0.0
+    disc_type = 'TL'
+    m_disc_pct = re.search(r'%\s*(\d+(?:[\.,]\d+)?)\s*[-_]?indirim|(\d+(?:[\.,]\d+)?)\s*%\s*[-_]?indirim', fn_str, re.IGNORECASE)
+    if m_disc_pct:
+        disc_type = '%'
+        d_val = m_disc_pct.group(1) or m_disc_pct.group(2)
+        try: disc = float(d_val.replace(',', '.'))
+        except (ValueError, TypeError): pass
+    else:
+        m_disc_tl = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl\s*[-_]?indirim', fn_str, re.IGNORECASE)
+        if m_disc_tl:
+            try: disc = float(m_disc_tl.group(1).replace(',', '.'))
+            except (ValueError, TypeError): pass
+
+    trendyol_p = 0.0
+    m_tr = re.search(r'%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_]?trendyol', fn_str, re.IGNORECASE)
+    if m_tr:
+        try: trendyol_p = float(m_tr.group(1).replace(',', '.'))
+        except (ValueError, TypeError): pass
+
+    return min_p, disc, trendyol_p, disc_type
 
 
 def save_counter_configs(manifest_path, counter_configs):
@@ -276,8 +296,20 @@ def save_counter_configs(manifest_path, counter_configs):
 
 
 def load_counter_configs(manifest_path):
+    manifest_path = Path(manifest_path)
     manifest = _read_manifest(manifest_path)
-    return manifest.get("counter_configs", [])
+    configs = manifest.get("counter_configs", [])
+    valid_configs = []
+    changed = False
+    for item in configs:
+        path = item.get("path") or item.get("stored_path")
+        if path and os.path.exists(path):
+            valid_configs.append(item)
+        else:
+            changed = True
+    if changed:
+        save_counter_configs(manifest_path, valid_configs)
+    return valid_configs
 
 
 def parse_plus_extra_filename(filename):
@@ -304,8 +336,72 @@ def save_plus_extra_configs(manifest_path, plus_extra_configs):
 
 
 def load_plus_extra_configs(manifest_path):
+    manifest_path = Path(manifest_path)
     manifest = _read_manifest(manifest_path)
-    return manifest.get("plus_extra_configs", [])
+    configs = manifest.get("plus_extra_configs", [])
+    valid_configs = []
+    changed = False
+    for item in configs:
+        path = item.get("path") or item.get("stored_path")
+        if path and os.path.exists(path):
+            valid_configs.append(item)
+        else:
+            changed = True
+    if changed:
+        save_plus_extra_configs(manifest_path, valid_configs)
+    return valid_configs
+
+
+def parse_coupon_filename(filename):
+    fn_str = str(filename)
+    min_p = 0.0
+    m_min = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?uzeri', fn_str, re.IGNORECASE)
+    if m_min:
+        try: min_p = float(m_min.group(1).replace(',', '.'))
+        except (ValueError, TypeError): pass
+
+    disc = 0.0
+    m_disc = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?kupon', fn_str, re.IGNORECASE)
+    if m_disc:
+        try: disc = float(m_disc.group(1).replace(',', '.'))
+        except (ValueError, TypeError): pass
+
+    trendyol_p = 0.0
+    m_tr = re.search(r'%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_]?trendyol', fn_str, re.IGNORECASE)
+    if m_tr:
+        try: trendyol_p = float(m_tr.group(1).replace(',', '.'))
+        except (ValueError, TypeError): pass
+
+    return min_p, disc, trendyol_p
+
+
+def save_coupon_configs(manifest_path, coupon_configs):
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    manifest["coupon_configs"] = coupon_configs
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
+    ) as temp_manifest:
+        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+        temp_manifest_path = Path(temp_manifest.name)
+    os.replace(temp_manifest_path, manifest_path)
+
+
+def load_coupon_configs(manifest_path):
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    configs = manifest.get("coupon_configs", [])
+    valid_configs = []
+    changed = False
+    for item in configs:
+        path = item.get("path") or item.get("stored_path")
+        if path and os.path.exists(path):
+            valid_configs.append(item)
+        else:
+            changed = True
+    if changed:
+        save_coupon_configs(manifest_path, valid_configs)
+    return valid_configs
 
 
 def load_upload_set(upload_dir, manifest_path):

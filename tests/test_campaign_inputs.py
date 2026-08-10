@@ -57,7 +57,7 @@ class CampaignInputTests(unittest.TestCase):
             source.mkdir()
             files = {}
             definitions = {
-                "discount": ["BARKOD", "Eski Fiyat", "YENİ Fiyat", "Durum"],
+                "discount": ["BARKOD", "Eski Fiyat", "YENİ Fiyat"],
                 "commission": [
                     "BARKOD",
                     "1.Fiyat Alt Limit",
@@ -133,36 +133,41 @@ class CampaignInputTests(unittest.TestCase):
             ("Plus Ek İndirim %5", 103, 108, 4.6),
             ("Karşılamalı Kampanya", 104, 115, 9.5),
         ]
-        initial, recommended, applicable = choose_campaigns_smart(100, candidates)
+        res = choose_campaigns_smart(100, candidates)
+        initial, recommended, applicable = res[0], res[1], res[2]
 
-        self.assertEqual(initial, "Flaş")
-        self.assertEqual(recommended, "Flaş Ürün")
+        self.assertEqual(initial, "Avantajlı")
+        self.assertEqual(recommended, "Avantajlı Ürün")
         self.assertEqual(
             applicable,
             "Avantajlı, Flaş, Plus, Plus Ek İndirim, Karşılamalı Kampanya",
         )
 
-        initial, recommended, applicable = choose_campaigns_smart(110, candidates)
+        res = choose_campaigns_smart(110, candidates)
+        initial, recommended, applicable = res[0], res[1], res[2]
 
-        self.assertEqual((initial, recommended), ("Flaş", "Flaş Ürün"))
+        self.assertEqual((initial, recommended), ("Avantajlı", "Avantajlı Ürün"))
         self.assertIn("Avantajlı", applicable)
 
-        initial, recommended, applicable = choose_campaigns_smart(
+        res = choose_campaigns_smart(
             110,
             [("Plus", 105, 100, 5, True)],
         )
+        initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))
 
-        initial, recommended, applicable = choose_campaigns_smart(
+        res = choose_campaigns_smart(
             110,
             [("Plus", 115, 100, 5, True)],
         )
+        initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Plus", "Plus Ürün", "Plus"))
 
-        initial, recommended, applicable = choose_campaigns_smart(
+        res = choose_campaigns_smart(
             None,
             [("Plus", 115, 100, 5, True)],
         )
+        initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))
 
 
@@ -263,7 +268,7 @@ class CalculatorInputTests(unittest.TestCase):
             )
 
             evaluation = result["results"][0]["counter_evaluations"]["Karşılamalı Test"]
-            self.assertEqual(set(evaluation), {"price", "rate", "net", "seller_disc"})
+            self.assertTrue({"price", "rate", "net", "seller_disc"}.issubset(set(evaluation)))
 
     def test_missing_campaign_price_uses_current_price_only_when_net_improves(self):
         from komisyon_hesaplayici import calculate_all
@@ -373,6 +378,81 @@ class CalculatorInputTests(unittest.TestCase):
             row = result["results"][0]
             self.assertEqual(row["İlk Kampanya Seçimi"], "Hiçbiri")
             self.assertEqual(row["eligible_campaigns"], ["Hiçbiri"])
+
+    def test_parse_counter_filename_percentage_mode(self):
+        from input_files import parse_counter_filename
+
+        min_p, disc, tr_p, disc_type = parse_counter_filename("2000_TL_Uzeri_%10_Indirim_%30_Trendyol_Karsilamali.xlsx")
+        self.assertEqual(min_p, 2000.0)
+        self.assertEqual(disc, 10.0)
+        self.assertEqual(tr_p, 30.0)
+        self.assertEqual(disc_type, "%")
+
+        min_p2, disc2, tr_p2, disc_type2 = parse_counter_filename("500_TL_Uzeri_40_TL_Indirim_%30_Trendyol_Karsilamali.xlsx")
+        self.assertEqual(min_p2, 500.0)
+        self.assertEqual(disc2, 40.0)
+        self.assertEqual(tr_p2, 30.0)
+        self.assertEqual(disc_type2, "TL")
+
+    def test_parse_coupon_filename(self):
+        from input_files import parse_coupon_filename
+
+        min_p, disc, tr_p = parse_coupon_filename("750-tl-uzerine-100-tl-kupon-trendyol-plus-musterilerine-ozel-_2026-08-10_17-12_tr-TR_part_1.xlsx")
+        self.assertEqual(min_p, 750.0)
+        self.assertEqual(disc, 100.0)
+        self.assertEqual(tr_p, 0.0)
+
+    def test_disabled_campaign_files_are_ignored_in_calculation(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            counter = root / "counter.xlsx"
+            discount = root / "discount.xlsx"
+
+            pd.DataFrame([
+                {"BARKOD": "A1", "Eski Fiyat": 100, "YENİ Fiyat": 90, "Durum": "İndirim"},
+            ]).to_excel(discount, index=False)
+
+            pd.DataFrame([
+                {
+                    "BARKOD": "A1",
+                    "1.Fiyat Alt Limit": 0,
+                    "2.Fiyat Üst Limiti": 100,
+                    "2.Fiyat Alt Limit": 100,
+                    "3.Fiyat Üst Limiti": 200,
+                    "3.Fiyat Alt Limit": 200,
+                    "4.Fiyat Üst Limiti": 300,
+                    "1.KOMİSYON": 15,
+                    "2.KOMİSYON": 15,
+                    "3.KOMİSYON": 15,
+                    "4.KOMİSYON": 15,
+                    "KOMİSYONA ESAS FİYAT": 100,
+                    "TARİFE GRUBU": "Grup 1",
+                }
+            ]).to_excel(commission, index=False)
+
+            pd.DataFrame([
+                {
+                    "Barkod": "A1",
+                    "Komisyon Oranı": 15,
+                    "Piyasa Satış Fiyatı (KDV Dahil)": 150,
+                    "Trendyol'da Satılacak Fiyat (KDV Dahil)": 100,
+                }
+            ]).to_excel(current, index=False)
+
+            pd.DataFrame([
+                {"Barkod": "A1", "Maksimum Girebileceğin Fiyat": 90}
+            ]).to_excel(counter, index=False)
+
+            res_disabled = calculate_all(
+                {"discount": discount, "commission": commission, "current": current},
+                counter_files=[{"path": counter, "min_price": 50, "discount_amount": 10, "enabled": False}],
+                output_dir=root / "output-disabled",
+            )
+            self.assertEqual(res_disabled["results"][0]["all_matching_extra_campaigns"], ["Hiçbiri"])
 
 
 if __name__ == "__main__":

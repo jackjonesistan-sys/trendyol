@@ -70,6 +70,7 @@ REPORT_COLUMNS = [
     "Karşılamalı Kampanya Fiyat (TL)",
     "Karşılamalı Kampanya Net",
     "Uygulanan Kampanya",
+    "Ekstra Kampanya",
     "Hangisi Karlı?",
     "Düşülebilecek Dip Fiyat (TL)",
     "Uygulanan Kampanya Fiyat",
@@ -124,7 +125,12 @@ def restore_persisted_collections(frame):
             lambda value, kind=expected_type: parse_persisted_collection(value, kind)
         )
         for column, expected_type in (
+            ("eligible_main_campaigns", list),
+            ("all_matching_main_campaigns", list),
+            ("eligible_extra_campaigns", list),
+            ("all_matching_extra_campaigns", list),
             ("eligible_campaigns", list),
+            ("all_matching_campaigns", list),
             ("counter_evaluations", dict),
             ("dip_details", list),
         )
@@ -134,7 +140,7 @@ def restore_persisted_collections(frame):
 
 def selection_payload_is_valid(selections):
     return isinstance(selections, dict) and all(
-        isinstance(barcode, str) and isinstance(selection, str)
+        isinstance(barcode, str) and (isinstance(selection, str) or isinstance(selection, dict))
         for barcode, selection in selections.items()
     )
 
@@ -158,66 +164,81 @@ def discount_between(current_price, campaign_price):
 
 
 def selected_campaign_values(row):
-    selection = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
-    if selection == "Hiçbiri":
-        return (
-            as_number(row.get("Güncel Ürün Fiyatı (TL)")),
-            as_number(row.get("Güncel Ürün Kalan Net (TL)")),
-            as_number(row.get("Güncel Ürün Komisyon (%)")),
-        )
-    if selection.startswith("Plus Ek İndirim %"):
-        rate = int(selection.rsplit("%", 1)[-1])
-        return (
-            as_number(row.get(f"Plus Ek Fiyatı %{rate} (TL)")),
-            as_number(row.get(f"Plus Ek Net %{rate} (TL)")),
-            as_number(row.get("Plus Ek Komisyon (%)")),
-        )
+    main_sel = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
+    extra_sel = row.get("userExtraSelection", "Hiçbiri") or "Hiçbiri"
+
+    if main_sel == "Avantajlı":
+        base_price = as_number(row.get("Avantajlı Ürün Fiyatı (YENİ TSF) (TL)"))
+        base_net = as_number(row.get("Avantajlı Ürün Kalan Net (TL)"))
+        base_comm = as_number(row.get("Avantajlı Ürün Komisyon (%)"))
+    elif main_sel == "Flaş":
+        base_price = as_number(row.get("Flaş Ürün 24 Saat Fiyatı (TL)"))
+        base_net = as_number(row.get("Flaş Ürün Kalan Net (TL)"))
+        base_comm = as_number(row.get("Flaş Ürün Komisyon (%)"))
+    elif main_sel == "Plus":
+        base_price = as_number(row.get("Plus Fiyatı (TL)"))
+        base_net = as_number(row.get("Plus Net (TL)"))
+        base_comm = as_number(row.get("Plus Komisyon (%)"))
+    else:
+        base_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
+        base_net = as_number(row.get("Güncel Ürün Kalan Net (TL)"))
+        base_comm = as_number(row.get("Güncel Ürün Komisyon (%)"))
+
+    if base_price is None:
+        base_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
+    if base_comm is None:
+        base_comm = as_number(row.get("Güncel Ürün Komisyon (%)"))
+
+    if extra_sel == "Hiçbiri" or not extra_sel:
+        return base_price, base_net, base_comm
 
     counter_evals = row.get("counter_evaluations", {})
-    if isinstance(counter_evals, dict) and selection in counter_evals:
-        c_info = counter_evals[selection]
-        return (
-            as_number(c_info.get("price")),
-            as_number(c_info.get("net")),
-            as_number(c_info.get("rate")),
-        )
+    if isinstance(counter_evals, dict) and extra_sel in counter_evals:
+        c_info = counter_evals[extra_sel]
+        c_price = as_number(c_info.get("price")) or base_price
+        
+        disc_type = c_info.get("disc_type", "%")
+        disc_val = as_number(c_info.get("disc_val", 0)) or 0
+        trendyol_percent = as_number(c_info.get("trendyol_percent", 0)) or 0
+        
+        if main_sel != "Hiçbiri" and base_price is not None and base_price < c_price:
+            if disc_type == "%":
+                tot_disc = round2(base_price * (disc_val / 100.0))
+            else:
+                tot_disc = disc_val
+            seller_disc = round2(tot_disc * (1.0 - (trendyol_percent / 100.0)))
+            final_price = round2(base_price - tot_disc)
+            final_comm = base_comm or 0
+            final_net = round2(final_price - (final_price * (final_comm / 100.0)) - seller_disc)
+            return final_price, final_net, final_comm
+        else:
+            seller_disc = as_number(c_info.get("seller_disc", 0)) or 0
+            final_price = c_price
+            final_comm = as_number(c_info.get("rate")) or base_comm
+            if final_comm is None: final_comm = 0
+            final_net = round2(final_price - (final_price * (final_comm / 100.0)) - seller_disc)
+            return final_price, final_net, final_comm
 
-    fields = {
-        "Avantajlı": (
-            "Avantajlı Ürün Fiyatı (YENİ TSF) (TL)",
-            "Avantajlı Ürün Kalan Net (TL)",
-            "Avantajlı Ürün Komisyon (%)",
-        ),
-        "Flaş": (
-            "Flaş Ürün 24 Saat Fiyatı (TL)",
-            "Flaş Ürün Kalan Net (TL)",
-            "Flaş Ürün Komisyon (%)",
-        ),
-        "Plus": ("Plus Fiyatı (TL)", "Plus Net (TL)", "Plus Komisyon (%)"),
-        "Karşılamalı Kampanya": (
-            "Karşılamalı Kampanya Fiyatı (TL)",
-            "Karşılamalı Kampanya Kalan Net (TL)",
-            "Karşılamalı Kampanya Komisyon (%)",
-        ),
-    }
-    selected = fields.get(selection)
-    if selected is None:
-        return None, None, None
-    price_field, net_field, commission_field = selected
-    return (
-        as_number(row.get(price_field)),
-        as_number(row.get(net_field)),
-        as_number(row.get(commission_field)),
-    )
+    if extra_sel.startswith("Plus Ek İndirim %"):
+        try:
+            rate = int(extra_sel.rsplit("%", 1)[-1])
+            final_price = round2(base_price * (1.0 - (rate / 100.0)))
+            final_comm = base_comm or 0
+            final_net = round2(final_price - (final_price * (final_comm / 100.0)))
+            return final_price, final_net, final_comm
+        except Exception:
+            pass
+
+    return base_price, base_net, base_comm
 
 
 def build_report_row(row):
-    selection = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
+    main_sel = row.get("userSelection", "Hiçbiri") or "Hiçbiri"
+    extra_sel = row.get("userExtraSelection", "Hiçbiri") or "Hiçbiri"
     current_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
     campaign_price, campaign_net, campaign_commission = selected_campaign_values(row)
     applied_amount, applied_percent = discount_between(current_price, campaign_price)
     
-    # Dip fiyat indirimli ürünlerde veya muhasebe listelerinden gelen dip fiyattır
     dip_price = as_number(row.get("Düşülebilecek Dip Fiyat (TL)"))
     available_amount, available_percent = discount_between(current_price, dip_price)
 
@@ -225,21 +246,22 @@ def build_report_row(row):
     extra_percent = None
     if available_amount is not None and applied_amount is not None:
         extra_amount = round2(max(available_amount - applied_amount, 0))
-        extra_percent = round2((extra_amount / current_price) * 100)
+        extra_percent = round2((extra_amount / current_price) * 100) if current_price else None
 
-    if selection.startswith("Plus Ek İndirim %"):
-        plus_rate = int(selection.rsplit("%", 1)[-1])
-        plus_extra_price = as_number(row.get(f"Plus Ek Fiyatı %{plus_rate} (TL)"))
-        plus_extra_net = as_number(row.get(f"Plus Ek Net %{plus_rate} (TL)"))
-    else:
-        plus_extra_price = None
-        plus_extra_net = None
+    plus_extra_price = None
+    plus_extra_net = None
+    if extra_sel.startswith("Plus Ek İndirim %"):
+        try:
+            plus_rate = int(extra_sel.rsplit("%", 1)[-1])
+            plus_extra_price = as_number(row.get(f"Plus Ek Fiyatı %{plus_rate} (TL)"))
+            plus_extra_net = as_number(row.get(f"Plus Ek Net %{plus_rate} (TL)"))
+        except Exception: pass
 
     counter_evals = row.get("counter_evaluations", {})
     counter_price = None
     counter_net = None
-    if isinstance(counter_evals, dict) and selection in counter_evals:
-        c_info = counter_evals[selection]
+    if isinstance(counter_evals, dict) and extra_sel in counter_evals:
+        c_info = counter_evals[extra_sel]
         counter_price = as_number(c_info.get("price"))
         counter_net = as_number(c_info.get("net"))
 
@@ -258,7 +280,8 @@ def build_report_row(row):
         "Plus Ek İndirim Net": plus_extra_net,
         "Karşılamalı Kampanya Fiyat (TL)": counter_price,
         "Karşılamalı Kampanya Net": counter_net,
-        "Uygulanan Kampanya": CAMPAIGN_LABELS.get(selection, selection),
+        "Uygulanan Kampanya": CAMPAIGN_LABELS.get(main_sel, main_sel),
+        "Ekstra Kampanya": CAMPAIGN_LABELS.get(extra_sel, extra_sel),
         "Hangisi Karlı?": row.get("Hangisi Daha Karlı?"),
         "Düşülebilecek Dip Fiyat (TL)": dip_price,
         "Uygulanan Kampanya Fiyat": campaign_price,
@@ -399,6 +422,7 @@ def shrink_data_validations(ws):
 
 @app.route("/")
 def index():
+    from input_files import load_coupon_configs
     return render_template(
         "index.html",
         report_columns=REPORT_COLUMNS,
@@ -406,6 +430,7 @@ def index():
         uploaded_inputs=load_upload_status(UPLOAD_DIR, INPUT_MANIFEST),
         counter_configs=load_counter_configs(INPUT_MANIFEST),
         plus_extra_configs=load_plus_extra_configs(INPUT_MANIFEST),
+        coupon_configs=load_coupon_configs(INPUT_MANIFEST),
     )
 
 
@@ -446,10 +471,91 @@ def save_expiry():
                     cfg["expiry_date"] = plus_extra_expiries[cid]
             save_plus_extra_configs(INPUT_MANIFEST, configs)
 
+        # Çoklu dosya (coupon) expiry'leri
+        coupon_expiries = data.get("coupon_expiries", {})
+        if coupon_expiries and isinstance(coupon_expiries, dict):
+            from input_files import load_coupon_configs, save_coupon_configs
+            configs = load_coupon_configs(INPUT_MANIFEST)
+            for cfg in configs:
+                cid = cfg.get("id", "")
+                if cid in coupon_expiries:
+                    cfg["expiry_date"] = coupon_expiries[cid]
+            save_coupon_configs(INPUT_MANIFEST, configs)
+
         return jsonify({"success": True})
     except Exception:
         app.logger.exception("Tarih kaydedilirken hata")
         return jsonify({"success": False, "message": "Tarih kaydedilemedi."}), 500
+
+@app.route("/api/remove-counter-file", methods=["POST"])
+def remove_counter_file():
+    try:
+        data = request.get_json(silent=True) or {}
+        item_id = data.get("id")
+        item_path = data.get("path")
+        
+        counter_configs = load_counter_configs(INPUT_MANIFEST)
+        new_configs = []
+        for item in counter_configs:
+            p = item.get("path") or item.get("stored_path")
+            if (item_id and item.get("id") == item_id) or (item_path and p == item_path):
+                if p and os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+            else:
+                new_configs.append(item)
+        save_counter_configs(INPUT_MANIFEST, new_configs)
+        return jsonify({"success": True, "counter_configs": new_configs})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/remove-plus-extra-file", methods=["POST"])
+def remove_plus_extra_file():
+    try:
+        data = request.get_json(silent=True) or {}
+        item_id = data.get("id")
+        item_path = data.get("path")
+        
+        plus_extra_configs = load_plus_extra_configs(INPUT_MANIFEST)
+        new_configs = []
+        for item in plus_extra_configs:
+            p = item.get("path") or item.get("stored_path")
+            if (item_id and item.get("id") == item_id) or (item_path and p == item_path):
+                if p and os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+            else:
+                new_configs.append(item)
+        save_plus_extra_configs(INPUT_MANIFEST, new_configs)
+        return jsonify({"success": True, "plus_extra_configs": new_configs})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/remove-coupon-file", methods=["POST"])
+def remove_coupon_file():
+    try:
+        data = request.get_json(silent=True) or {}
+        item_id = data.get("id")
+        item_path = data.get("path")
+        
+        from input_files import load_coupon_configs, save_coupon_configs
+        coupon_configs = load_coupon_configs(INPUT_MANIFEST)
+        new_configs = []
+        for item in coupon_configs:
+            p = item.get("path") or item.get("stored_path")
+            if (item_id and item.get("id") == item_id) or (item_path and p == item_path):
+                if p and os.path.exists(p):
+                    try: os.remove(p)
+                    except Exception: pass
+            else:
+                new_configs.append(item)
+        save_coupon_configs(INPUT_MANIFEST, new_configs)
+        return jsonify({"success": True, "coupon_configs": new_configs})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 @app.route("/api/data")
 def get_data():
@@ -463,7 +569,12 @@ def get_data():
         for rec in records:
             b = str(rec.get("Barkod", "")).strip()
             if b in user_selections:
-                rec["İlk Kampanya Seçimi"] = user_selections[b]
+                val = user_selections[b]
+                if isinstance(val, dict):
+                    rec["İlk Kampanya Seçimi"] = val.get("main", "Hiçbiri")
+                    rec["İlk Ekstra Kampanya Seçimi"] = val.get("extra", "Hiçbiri")
+                else:
+                    rec["İlk Kampanya Seçimi"] = str(val)
     cleaned_records = clean_nans(records)
     return jsonify(cleaned_records), 200
 
@@ -524,8 +635,17 @@ def calculate():
 
             min_p = float(item.get("min_price", 0))
             disc_amt = float(item.get("discount_amount", 0))
+            disc_type = str(item.get("discount_type") or item.get("discount_unit") or "TL").strip()
             tr_pct = float(item.get("trendyol_percent", 0))
-            label = item.get("label") or (f"Karşılamalı ({int(min_p) if min_p.is_integer() else min_p} TL Üzeri / {int(disc_amt) if disc_amt.is_integer() else disc_amt} TL İndirim)" if min_p > 0 else f"Karşılamalı #{idx+1}")
+
+            min_p_str = int(min_p) if min_p.is_integer() else min_p
+            disc_str = int(disc_amt) if disc_amt.is_integer() else disc_amt
+            if disc_type == "%":
+                disc_label_part = f"%{disc_str} İndirim"
+            else:
+                disc_label_part = f"{disc_str} TL İndirim"
+
+            label = item.get("label") or (f"Karşılamalı ({min_p_str} TL Üzeri / {disc_label_part})" if min_p > 0 else f"Karşılamalı #{idx+1}")
 
             counter_files.append({
                 "id": item.get("id", f"counter_{idx+1}"),
@@ -534,8 +654,10 @@ def calculate():
                 "path": item.get("stored_path"),
                 "min_price": min_p,
                 "discount_amount": disc_amt,
+                "discount_type": disc_type,
                 "trendyol_percent": tr_pct,
                 "expiry_date": item.get("expiry_date", ""),
+                "enabled": item.get("enabled", True) is not False,
             })
 
         save_counter_configs(INPUT_MANIFEST, counter_files)
@@ -573,9 +695,56 @@ def calculate():
                 "path": item.get("stored_path"),
                 "rate": rate,
                 "expiry_date": item.get("expiry_date", ""),
+                "enabled": item.get("enabled", True) is not False,
             })
 
         save_plus_extra_configs(INPUT_MANIFEST, plus_extra_files)
+
+        from input_files import save_coupon_configs, load_coupon_configs
+
+        coupon_configs_raw = request.form.get("coupon_configs_json")
+        coupon_configs = json.loads(coupon_configs_raw) if coupon_configs_raw else []
+
+        coupon_files = []
+        coupon_dir = os.path.join(UPLOAD_DIR, "coupon_files")
+        os.makedirs(coupon_dir, exist_ok=True)
+
+        for idx, item in enumerate(coupon_configs):
+            file_key = f"coupon_file_{idx}"
+            file_obj = request.files.get(file_key)
+            stored_name = f"coupon_{idx+1}.xlsx"
+            target_path = os.path.join(coupon_dir, stored_name)
+
+            if file_obj and file_obj.filename:
+                file_obj.save(target_path)
+                item["stored_path"] = target_path
+                item["original_name"] = file_obj.filename
+            else:
+                if os.path.exists(target_path):
+                    item["stored_path"] = target_path
+
+            min_p = float(item.get("min_price", 0))
+            disc_amt = float(item.get("discount_amount", 0))
+            tr_pct = float(item.get("trendyol_percent", 0))
+
+            min_p_str = int(min_p) if min_p.is_integer() else min_p
+            disc_str = int(disc_amt) if disc_amt.is_integer() else disc_amt
+
+            label = item.get("label") or f"{min_p_str} TL Üzerine {disc_str} TL Kupon - Trendyol Plus Müşterilerine Özel"
+
+            coupon_files.append({
+                "id": item.get("id", f"coupon_{idx+1}"),
+                "label": label,
+                "filename": item.get("filename") or item.get("original_name") or f"coupon_{idx+1}.xlsx",
+                "path": item.get("stored_path"),
+                "min_price": min_p,
+                "discount_amount": disc_amt,
+                "trendyol_percent": tr_pct,
+                "expiry_date": item.get("expiry_date", ""),
+                "enabled": item.get("enabled", True) is not False,
+            })
+
+        save_coupon_configs(INPUT_MANIFEST, coupon_files)
 
 
         toplam_indirim = float(request.form.get("toplam_indirim", 0) or 0)
@@ -590,11 +759,12 @@ def calculate():
         # Reset saved user selections on new calculation so all products start fresh as 'Hiçbiri'
         save_user_selections(INPUT_MANIFEST, {})
         user_selections = {}
-        result = calculate_all(input_files, counter_files=counter_files, plus_extra_files=plus_extra_files, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR, user_selections=user_selections)
+        result = calculate_all(input_files, counter_files=counter_files, plus_extra_files=plus_extra_files, coupon_files=coupon_files, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR, user_selections=user_selections)
         if result.get("success"):
             result["uploads"] = load_upload_status(UPLOAD_DIR, INPUT_MANIFEST)
             result["counter_configs"] = load_counter_configs(INPUT_MANIFEST)
             result["plus_extra_configs"] = load_plus_extra_configs(INPUT_MANIFEST)
+            result["coupon_configs"] = load_coupon_configs(INPUT_MANIFEST)
             pd.DataFrame(result["results"]).to_excel(F_HESAP, index=False)
             result = clean_nans(result)
         return jsonify(result), (200 if result.get("success") else 500)
@@ -690,7 +860,16 @@ def apply_campaign():
         b_key = str(row.get("Barkod", "")).strip()
         if b_key:
             row_by_barcode[b_key] = row
-            
+
+    def get_selection(b_key):
+        val = selections.get(b_key, "Hiçbiri")
+        if isinstance(val, dict):
+            return val.get('main', 'Hiçbiri'), val.get('extra', 'Hiçbiri')
+        s = str(val or 'Hiçbiri')
+        if s in ('Avantajlı', 'Flaş', 'Plus', 'Hiçbiri'):
+            return s, 'Hiçbiri'
+        return 'Hiçbiri', s
+
     # 1. Process Avantajlı
     if target_type in ['Hepsi', 'Avantajlı'] and F_AVAN:
         try:
@@ -707,9 +886,9 @@ def apply_campaign():
                     b_val = ws_av.cell(r, b_idx_av).value
                     if not b_val: continue
                     b_val_str = str(b_val).strip()
-                    sel = selections.get(b_val_str, "Hiçbiri")
+                    main_sel, extra_sel = get_selection(b_val_str)
                     row_info = row_by_barcode.get(b_val_str, {})
-                    should_keep = sel == "Avantajlı"
+                    should_keep = (main_sel == "Avantajlı")
 
                     if should_keep:
                         selected_price = row_info.get('Avantajlı Ürün Fiyatı (YENİ TSF) (TL)')
@@ -748,8 +927,8 @@ def apply_campaign():
                     if not b_val: continue
                 
                     b_val_str = str(b_val).strip()
-                    sel = selections.get(b_val_str, "Hiçbiri")
-                    should_keep = sel == "Flaş"
+                    main_sel, extra_sel = get_selection(b_val_str)
+                    should_keep = (main_sel == "Flaş")
                 
                     if should_keep:
                         date_val = str(ws_fl.cell(r, baslangic_idx).value or "").strip()
@@ -811,8 +990,8 @@ def apply_campaign():
                         b_val = ws_plus.cell(r, b_idx_plus).value
                         if not b_val: continue
                         b_val_str = str(b_val).strip()
-                        sel = selections.get(b_val_str, "Hiçbiri")
-                        should_keep = sel == "Plus"
+                        main_sel, extra_sel = get_selection(b_val_str)
+                        should_keep = (main_sel == "Plus")
 
                         if should_keep:
                             date_key = "Genel"
@@ -882,8 +1061,9 @@ def apply_campaign():
                             if not b_val: continue
 
                             b_val_str = str(b_val).strip()
-                            sel = selections.get(b_val_str, "Hiçbiri")
-                            if sel == c_label:
+                            main_sel, extra_sel = get_selection(b_val_str)
+                            should_keep = (extra_sel == c_label) or (target_type == "Plus Ek İndirim" and extra_sel.startswith("Plus Ek İndirim"))
+                            if should_keep:
                                 max_f = ws_pe.cell(r, max_fiyat_idx_pe).value
                                 campaign_price = discounted_price(max_f, rate) if max_f and rate > 0 else max_f
                                 if campaign_price is not None:
@@ -945,8 +1125,8 @@ def apply_campaign():
                             if not b_val: continue
                             
                             b_val_str = str(b_val).strip()
-                            sel = selections.get(b_val_str, "Hiçbiri")
-                            should_keep = (sel == c_label) or (target_type == "Karşılamalı Kampanya" and sel.startswith("Karşılamalı"))
+                            main_sel, extra_sel = get_selection(b_val_str)
+                            should_keep = (extra_sel == c_label) or (target_type == "Karşılamalı Kampanya" and extra_sel.startswith("Karşılamalı"))
 
                             if should_keep:
                                 max_fiyat_val = ws_kars.cell(r, max_fiyat_idx_kars).value
@@ -971,19 +1151,29 @@ def apply_campaign():
                             min_p = format_num_clean(c_item.get('min_price'))
                             disc = format_num_clean(c_item.get('discount_amount'))
                             tp = format_num_clean(c_item.get('trendyol_percent'))
+                            disc_type = c_item.get('discount_type') or c_item.get('discount_unit') or 'TL'
 
                             if not min_p or not disc:
                                 import re
-                                m = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*(\d+(?:[\.,]\d+)?)\s*TL', c_label, re.IGNORECASE)
-                                if m:
-                                    min_p = min_p or format_num_clean(m.group(1))
-                                    disc = disc or format_num_clean(m.group(2))
+                                m_pct = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*%\s*(\d+(?:[\.,]\d+)?)', c_label, re.IGNORECASE)
+                                if not m_pct:
+                                    m_pct = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*(\d+(?:[\.,]\d+)?)\s*%', c_label, re.IGNORECASE)
+                                if m_pct:
+                                    min_p = min_p or format_num_clean(m_pct.group(1))
+                                    disc = disc or format_num_clean(m_pct.group(2))
+                                    disc_type = '%'
+                                else:
+                                    m = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*(\d+(?:[\.,]\d+)?)\s*TL', c_label, re.IGNORECASE)
+                                    if m:
+                                        min_p = min_p or format_num_clean(m.group(1))
+                                        disc = disc or format_num_clean(m.group(2))
 
                             if min_p and disc:
+                                disc_part = f"%{disc}" if disc_type == '%' else f"{disc}_TL"
                                 if tp and tp != '0':
-                                    out_filename = f"{min_p}_TL_Uzeri_{disc}_TL_Indirim_%{tp}_Trendyol_Karsilamali.xlsx"
+                                    out_filename = f"{min_p}_TL_Uzeri_{disc_part}_Indirim_%{tp}_Trendyol_Karsilamali.xlsx"
                                 else:
-                                    out_filename = f"{min_p}_TL_Uzeri_{disc}_TL_Indirim_Trendyol_Karsilamali.xlsx"
+                                    out_filename = f"{min_p}_TL_Uzeri_{disc_part}_Indirim_Trendyol_Karsilamali.xlsx"
                             else:
                                 tr_map = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
                                 clean_l = c_label.translate(tr_map)
@@ -998,6 +1188,73 @@ def apply_campaign():
                             generated_files.append(os.path.join(timestamp_folder, out_filename))
         except Exception:
             return processing_error("Karşılamalı Kampanya dosyası")
+
+    # 6. Process Kupon (Çoklu Dosya Desteği)
+    if target_type in ['Hepsi', 'Kupon', 'Plus Kupon', 'Karşılamalı Kampanya']:
+        try:
+            from input_files import load_coupon_configs
+            coupon_configs = load_coupon_configs(INPUT_MANIFEST)
+            
+            for idx, cp_item in enumerate(coupon_configs):
+                cp_path = cp_item.get('stored_path') or cp_item.get('path')
+                if cp_path and os.path.exists(cp_path):
+                    wb_cp = openpyxl.load_workbook(cp_path)
+                    ws_cp = wb_cp.active
+                    header_cp = [ws_cp.cell(1, c).value for c in range(1, ws_cp.max_column + 1)]
+                    b_idx_cp = header_cp.index('Barkod') + 1 if 'Barkod' in header_cp else None
+                    secim_idx_cp = header_cp.index('Eklenecek Ürünleri Seçiniz') + 1 if 'Eklenecek Ürünleri Seçiniz' in header_cp else None
+                    
+                    if b_idx_cp and secim_idx_cp:
+                        cp_label = cp_item.get('label') or f"Kupon #{idx+1}"
+                        keep_rows = []
+                        for r in range(2, ws_cp.max_row + 1):
+                            b_val = ws_cp.cell(r, b_idx_cp).value
+                            if not b_val: continue
+                            
+                            b_val_str = str(b_val).strip()
+                            main_sel, extra_sel = get_selection(b_val_str)
+                            should_keep = (extra_sel == cp_label) or (target_type in ["Kupon", "Plus Kupon"] and extra_sel.startswith(cp_label.split()[0]))
+
+                            if should_keep:
+                                ws_cp.cell(r, secim_idx_cp).value = "Seçildi"
+                                keep_rows.append(r)
+                                
+                        if keep_rows:
+                            safe_keep_rows(ws_cp, keep_rows)
+                            
+                            def format_num_clean(val):
+                                if val is None or val == "": return None
+                                try:
+                                    n = float(val)
+                                    return f"{int(n)}" if n.is_integer() else f"{n}"
+                                except (ValueError, TypeError):
+                                    return str(val).strip()
+
+                            min_p = format_num_clean(cp_item.get('min_price'))
+                            disc = format_num_clean(cp_item.get('discount_amount'))
+                            tp = format_num_clean(cp_item.get('trendyol_percent'))
+
+                            if min_p and disc:
+                                if tp and tp != '0':
+                                    out_filename = f"{min_p}_TL_Uzerine_{disc}_TL_Kupon_%{tp}_Trendyol_Plus.xlsx"
+                                else:
+                                    out_filename = f"{min_p}_TL_Uzerine_{disc}_TL_Kupon_Trendyol_Plus.xlsx"
+                            else:
+                                tr_map = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+                                clean_l = cp_label.translate(tr_map)
+                                safe_l = re.sub(r'[^\w%]', '_', clean_l)
+                                safe_l = re.sub(r'_+', '_', safe_l).strip('_')
+                                out_filename = f"Kupon_{safe_l}.xlsx"
+
+                            out_name = os.path.join(run_output_dir, out_filename)
+                            shrink_data_validations(ws_cp)
+                            wb_cp.save(out_name)
+                            fix_xlsx_for_trendyol(out_name)
+                            generated_files.append(os.path.join(timestamp_folder, out_filename))
+        except Exception as e:
+            print("Kupon export error:", e)
+            return processing_error("Kupon Kampanyası dosyası")
+
     # Ekstra Rapor ve Uygulanmayanlar Excel Çıktıları
     try:
         df_all = pd.DataFrame(table_data)
