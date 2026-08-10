@@ -714,6 +714,9 @@
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script id="report-columns-data" type="application/json">{{ report_columns | tojson }}</script>
+    <script id="counter-configs-data" type="application/json">{{ counter_configs | tojson | safe if counter_configs is defined else '[]' }}</script>
+    <script id="plus-extra-configs-data" type="application/json">{{ plus_extra_configs | tojson | safe if plus_extra_configs is defined else '[]' }}</script>
+    <script id="coupon-configs-data" type="application/json">{{ coupon_configs | tojson | safe if coupon_configs is defined else '[]' }}</script>
 
     <script>
         let tableData = [];
@@ -929,6 +932,7 @@
                     tableData = data.map((row, index) => ({
                         ...row,
                         userSelection: row['İlk Kampanya Seçimi'] || 'Hiçbiri',
+                        userExtraSelection: row['İlk Ekstra Kampanya Seçimi'] || 'Hiçbiri',
                         _index: index,
                         checked: false
                     }));
@@ -1223,9 +1227,9 @@
             $('.col-toggle-cb').prop('checked', isVisible);
         }
 
-        const initialCounterConfigs = {{ counter_configs | tojson | safe if counter_configs is defined else '[]' }};
-        const initialPlusExtraConfigs = {{ plus_extra_configs | tojson | safe if plus_extra_configs is defined else '[]' }};
-        const initialCouponConfigs = {{ coupon_configs | tojson | safe if coupon_configs is defined else '[]' }};
+        const initialCounterConfigs = JSON.parse(document.getElementById('counter-configs-data')?.textContent || '[]');
+        const initialPlusExtraConfigs = JSON.parse(document.getElementById('plus-extra-configs-data')?.textContent || '[]');
+        const initialCouponConfigs = JSON.parse(document.getElementById('coupon-configs-data')?.textContent || '[]');
 
         let counterFilesState = Array.isArray(initialCounterConfigs) ? initialCounterConfigs.map(item => ({
             id: item.id || ('counter_' + Math.random().toString(36).substr(2, 9)),
@@ -1235,6 +1239,7 @@
             discount_type: item.discount_type || item.discount_unit || 'TL',
             trendyol_percent: parseFloat(item.trendyol_percent) || 0,
             expiry_date: item.expiry_date || '',
+            enabled: item.enabled !== false,
             fileObj: null
         })) : [];
 
@@ -1243,6 +1248,7 @@
             filename: item.filename || item.original_name || 'Plus Ek İndirim.xlsx',
             rate: parseFloat(item.rate) || 0,
             expiry_date: item.expiry_date || '',
+            enabled: item.enabled !== false,
             fileObj: null
         })) : [];
 
@@ -1253,6 +1259,7 @@
             discount_amount: parseFloat(item.discount_amount) || 0,
             trendyol_percent: parseFloat(item.trendyol_percent) || 0,
             expiry_date: item.expiry_date || '',
+            enabled: item.enabled !== false,
             fileObj: null
         })) : [];
 
@@ -1411,6 +1418,11 @@
                 item.enabled = isEnabled;
                 renderCounterCards();
                 updateBulkCampaignOptions();
+                fetch('/api/toggle-campaign-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'counter', id: id, enabled: isEnabled })
+                }).catch(function () { });
             }
         }
 
@@ -1420,6 +1432,11 @@
                 item.enabled = isEnabled;
                 renderPlusExtraCards();
                 updateBulkCampaignOptions();
+                fetch('/api/toggle-campaign-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'plus_extra', id: id, enabled: isEnabled })
+                }).catch(function () { });
             }
         }
 
@@ -1429,6 +1446,11 @@
                 item.enabled = isEnabled;
                 renderCouponCards();
                 updateBulkCampaignOptions();
+                fetch('/api/toggle-campaign-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'coupon', id: id, enabled: isEnabled })
+                }).catch(function () { });
             }
         }
 
@@ -2011,26 +2033,63 @@
 
         function extraSelectionHtml(row) {
             const rowIndex = row._index;
-            const matching = (Array.isArray(row.all_matching_extra_campaigns) && row.all_matching_extra_campaigns.length)
-                ? row.all_matching_extra_campaigns
-                : (Array.isArray(row.all_matching_campaigns) ? row.all_matching_campaigns.filter(c => c !== 'Avantajlı' && c !== 'Flaş' && c !== 'Plus') : ['Hiçbiri']);
 
+            const extraSet = new Set(['Hiçbiri']);
+            if (Array.isArray(row.all_matching_extra_campaigns)) {
+                row.all_matching_extra_campaigns.forEach(c => extraSet.add(c));
+            }
+            if (Array.isArray(counterFilesState)) {
+                counterFilesState.forEach((item, idx) => {
+                    const minP = item.min_price;
+                    const disc = item.discount_amount;
+                    const isPct = item.discount_type === '%';
+                    const minPStr = (minP && Number.isInteger(minP)) ? parseInt(minP, 10) : minP;
+                    const discStr = (disc && Number.isInteger(disc)) ? parseInt(disc, 10) : disc;
+                    const discPart = isPct ? `%${discStr} İndirim` : `${discStr} TL İndirim`;
+                    const label = (minP > 0 || disc > 0) ? `Karşılamalı (${minPStr} TL Üzeri / ${discPart})` : (item.label || `Karşılamalı #${idx + 1}`);
+                    extraSet.add(label);
+                });
+            }
+            if (Array.isArray(plusExtraFilesState)) {
+                plusExtraFilesState.forEach((item, idx) => {
+                    const rate = item.rate;
+                    const rateStr = (rate && Number.isInteger(rate)) ? parseInt(rate, 10) : rate;
+                    const label = rate > 0 ? `Plus Ek İndirim %${rateStr}` : (item.label || `Plus Ek İndirim #${idx + 1}`);
+                    extraSet.add(label);
+                });
+            }
+            if (Array.isArray(couponFilesState)) {
+                couponFilesState.forEach((item, idx) => {
+                    const minP = item.min_price;
+                    const disc = item.discount_amount;
+                    const minPStr = (minP && Number.isInteger(minP)) ? parseInt(minP, 10) : minP;
+                    const discStr = (disc && Number.isInteger(disc)) ? parseInt(disc, 10) : disc;
+                    const label = (minP > 0 || disc > 0) ? `${minPStr} TL Üzerine ${discStr} TL Kupon - Trendyol Plus Müşterilerine Özel` : (item.label || `Kupon #${idx + 1}`);
+                    extraSet.add(label);
+                });
+            }
+            if (row.userExtraSelection) {
+                extraSet.add(row.userExtraSelection);
+            }
+
+            const matchingList = Array.from(extraSet);
             const safeEligible = Array.isArray(row.eligible_extra_campaigns) ? row.eligible_extra_campaigns : ['Hiçbiri'];
 
             let selectHtml = `<select class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
 
-            matching.forEach(cName => {
+            matchingList.forEach(cName => {
                 const isSelected = (row.userExtraSelection || 'Hiçbiri') === cName;
                 const displayLabel = CAMPAIGN_LABELS[cName] || cName;
                 const isSafe = safeEligible.includes(cName);
                 const isBelowDip = cName !== 'Hiçbiri' && !isSafe;
-                const tag = isBelowDip ? ' (Dip Altı)' : '';
-                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}>${escapeHtml(displayLabel + tag)}</option>`;
+
+                let extraTag = isBelowDip ? ' (Dip Altı)' : '';
+                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}>${escapeHtml(displayLabel + extraTag)}</option>`;
             });
 
             selectHtml += '</select>';
 
-            const badges = matching
+            const badges = (Array.isArray(row.all_matching_extra_campaigns) ? row.all_matching_extra_campaigns : [])
                 .filter(c => c !== 'Hiçbiri')
                 .map(cName => {
                     const label = CAMPAIGN_LABELS[cName] || cName;

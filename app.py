@@ -487,6 +487,44 @@ def save_expiry():
         app.logger.exception("Tarih kaydedilirken hata")
         return jsonify({"success": False, "message": "Tarih kaydedilemedi."}), 500
 
+
+@app.route("/api/toggle-campaign-enabled", methods=["POST"])
+def toggle_campaign_enabled():
+    """Kampanya kartının Aktif/Pasif durumunu anında kaydedip saklar."""
+    data = request.get_json(silent=True) or {}
+    try:
+        camp_type = data.get("type")  # 'counter', 'plus_extra', or 'coupon'
+        item_id = data.get("id")
+        enabled = bool(data.get("enabled", True))
+
+        if camp_type == "counter":
+            from input_files import load_counter_configs, save_counter_configs
+            configs = load_counter_configs(INPUT_MANIFEST)
+            for item in configs:
+                if item.get("id") == item_id:
+                    item["enabled"] = enabled
+            save_counter_configs(INPUT_MANIFEST, configs)
+        elif camp_type == "plus_extra":
+            from input_files import load_plus_extra_configs, save_plus_extra_configs
+            configs = load_plus_extra_configs(INPUT_MANIFEST)
+            for item in configs:
+                if item.get("id") == item_id:
+                    item["enabled"] = enabled
+            save_plus_extra_configs(INPUT_MANIFEST, configs)
+        elif camp_type == "coupon":
+            from input_files import load_coupon_configs, save_coupon_configs
+            configs = load_coupon_configs(INPUT_MANIFEST)
+            for item in configs:
+                if item.get("id") == item_id:
+                    item["enabled"] = enabled
+            save_coupon_configs(INPUT_MANIFEST, configs)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        app.logger.exception("Kampanya durumu kaydedilirken hata")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route("/api/remove-counter-file", methods=["POST"])
 def remove_counter_file():
     try:
