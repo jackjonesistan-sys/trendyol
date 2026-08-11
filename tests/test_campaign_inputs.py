@@ -22,6 +22,40 @@ def write_xlsx(path, columns, row=None):
     )
 
 
+def write_calculation_base(root, barcodes, current_price=200, current_rate=0):
+    paths = {name: root / f"{name}.xlsx" for name in ("discount", "commission", "current")}
+    pd.DataFrame([
+        {"BARKOD": barcode, "Eski Fiyat": current_price, "YENİ Fiyat": 80, "Durum": "İndirim"}
+        for barcode in barcodes
+    ]).to_excel(paths["discount"], index=False)
+    pd.DataFrame([
+        {
+            "BARKOD": barcode,
+            "1.Fiyat Alt Limit": 0,
+            "2.Fiyat Üst Limiti": None,
+            "2.Fiyat Alt Limit": None,
+            "3.Fiyat Üst Limiti": None,
+            "3.Fiyat Alt Limit": None,
+            "4.Fiyat Üst Limiti": None,
+            "1.KOMİSYON": current_rate,
+            "2.KOMİSYON": current_rate,
+            "3.KOMİSYON": current_rate,
+            "4.KOMİSYON": current_rate,
+        }
+        for barcode in barcodes
+    ]).to_excel(paths["commission"], index=False)
+    pd.DataFrame([
+        {
+            "Barkod": barcode,
+            "Komisyon Oranı": current_rate,
+            "Piyasa Satış Fiyatı (KDV Dahil)": current_price,
+            "Trendyol'da Satılacak Fiyat (KDV Dahil)": current_price,
+        }
+        for barcode in barcodes
+    ]).to_excel(paths["current"], index=False)
+    return paths
+
+
 class CampaignInputTests(unittest.TestCase):
     def test_non_finite_values_are_not_valid_numbers(self):
         from komisyon_hesaplayici import to_float
@@ -885,6 +919,492 @@ class CalculatorInputTests(unittest.TestCase):
                 output_dir=root / "output-disabled",
             )
             self.assertEqual(res_disabled["results"][0]["all_matching_extra_campaigns"], ["Hiçbiri"])
+
+
+class PlusPeriodCalculationTests(unittest.TestCase):
+    def test_flash_merge_follows_export_template_interval_identity(self):
+        from komisyon_hesaplayici import merge_flash_intervals
+
+        def interval(start, price, origin="kampanya"):
+            return {
+                "period": "24 Saat",
+                "start": start,
+                "end": start.replace("00:00:00", "23:59:00") if start else None,
+                "price": price,
+                "source": "24 Saat Fiyat",
+                "origin": origin,
+                "used_current_price": False,
+            }
+
+        standard_17 = interval("2026-08-17 00:00:00", 980)
+        standard_18 = interval("2026-08-18 00:00:00", 970)
+        accounting_18 = interval("2026-08-18 00:00:00", 955, "muhasebe")
+
+        self.assertEqual(
+            merge_flash_intervals([standard_17], [accounting_18]),
+            [standard_17],
+        )
+
+        exact_accounting = interval("2026-08-17 00:00:00", 950, "muhasebe")
+        self.assertEqual(
+            merge_flash_intervals([standard_17], [exact_accounting]),
+            [exact_accounting],
+        )
+        second_exact = {**exact_accounting, "price": 940}
+        self.assertEqual(
+            merge_flash_intervals([standard_17], [exact_accounting, second_exact]),
+            [standard_17],
+        )
+
+        generic_accounting = interval(None, 945, "muhasebe")
+        generic_overlay = merge_flash_intervals([standard_17], [generic_accounting])
+        self.assertEqual(
+            (generic_overlay[0]["start"], generic_overlay[0]["end"], generic_overlay[0]["price"]),
+            (standard_17["start"], standard_17["end"], 945),
+        )
+        self.assertEqual(
+            merge_flash_intervals([standard_17, standard_18], [generic_accounting]),
+            [standard_17, standard_18],
+        )
+        second_generic = {**generic_accounting, "price": 940}
+        self.assertEqual(
+            merge_flash_intervals([standard_17], [generic_accounting, second_generic]),
+            [standard_17],
+        )
+
+        accounting_only = [exact_accounting, accounting_18]
+        self.assertEqual(merge_flash_intervals([], accounting_only), accounting_only)
+
+    def test_period_helpers_preserve_duplicate_offer_positions_and_workbook_labels(self):
+        from input_files import choose_plus_tariff_label, find_plus_period_columns
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workbook = Path(temp_dir) / "plus.xlsx"
+            columns = [
+                "Barkod",
+                "Tarih Aralığı (2 Gün)",
+                "Plus Komisyon Teklifi",
+                "Tarih Aralığı (5 Gün)",
+                "Plus Komisyon Teklifi",
+                "2 Gün Tarih Aralığı",
+                "5 Gün Tarih Aralığı",
+                "7 Gün Tarih Aralığı",
+            ]
+            pd.DataFrame([[
+                "A1", "1-3 Eylül", 10, "3-8 Eylül", 20,
+                "2 Günlük Fiyat (1-3 Eylül)",
+                "5 Günlük Fiyat (3-8 Eylül)",
+                "Birleşik 7 Günlük Fiyat",
+            ]], columns=columns).to_excel(workbook, index=False)
+            row = pd.read_excel(workbook).iloc[0]
+
+        periods = find_plus_period_columns(row.index)
+        self.assertEqual(
+            [
+                (
+                    period["days"],
+                    period["date_position"],
+                    period["offer_position"],
+                    period["date_column"],
+                    period["offer_column"],
+                )
+                for period in periods
+            ],
+            [
+                (2, 1, 2, "Tarih Aralığı (2 Gün)", "Plus Komisyon Teklifi"),
+                (5, 3, 4, "Tarih Aralığı (5 Gün)", "Plus Komisyon Teklifi.1"),
+            ],
+        )
+        self.assertEqual(
+            choose_plus_tariff_label(row, periods, [2, 5]),
+            "Birleşik 7 Günlük Fiyat",
+        )
+        self.assertEqual(
+            choose_plus_tariff_label(row, periods, [5]),
+            "5 Günlük Fiyat (3-8 Eylül)",
+        )
+        fallback_row = row.drop(labels=["5 Gün Tarih Aralığı", "7 Gün Tarih Aralığı"])
+        self.assertEqual(choose_plus_tariff_label(fallback_row, periods, [2, 5]), "7 Günlük Fiyat")
+        self.assertEqual(
+            choose_plus_tariff_label(fallback_row, periods, [5]),
+            "5 Günlük Fiyat (3-8 Eylül)",
+        )
+        self.assertIsNone(choose_plus_tariff_label(row, periods, []))
+
+    def test_two_period_plus_selects_both_first_second_or_none(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            barcodes = ("BOTH", "FIRST", "SECOND", "NONE")
+            inputs = write_calculation_base(root, barcodes)
+            plus = root / "plus.xlsx"
+            columns = [
+                "Barkod",
+                "Plus Fiyat Üst Limiti",
+                "Tarih Aralığı (3 Gün)",
+                "Plus Komisyon Teklifi",
+                "Tarih Aralığı (4 Gün)",
+                "Plus Komisyon Teklifi",
+                "Plus Fiyat Seçimi",
+                "Tarife Seçimi",
+                "3 Gün Tarih Aralığı",
+                "4 Gün Tarih Aralığı",
+                "7 Gün Tarih Aralığı",
+            ]
+            rows = [
+                ["BOTH", 100, "11-14 Ağustos", 10, "14-18 Ağustos", 20, None, None,
+                 "3 Günlük Fiyat (11-14 Ağustos)", "4 Günlük Fiyat (14-18 Ağustos)", "7 Günlük Fiyat"],
+                ["FIRST", 100, "11-14 Ağustos", 11, None, 19, None, None,
+                 "3 Günlük Fiyat (11-14 Ağustos)", "4 Günlük Fiyat (14-18 Ağustos)", "7 Günlük Fiyat"],
+                ["SECOND", 100, None, 18, "14-18 Ağustos", 12, None, None,
+                 "3 Günlük Fiyat (11-14 Ağustos)", "4 Günlük Fiyat (14-18 Ağustos)", "7 Günlük Fiyat"],
+                ["NONE", 100, "11-14 Ağustos", -1, "14-18 Ağustos", 101, None, None,
+                 "3 Günlük Fiyat (11-14 Ağustos)", "4 Günlük Fiyat (14-18 Ağustos)", "7 Günlük Fiyat"],
+            ]
+            pd.DataFrame(rows, columns=columns).to_excel(plus, index=False)
+            inputs["plus"] = plus
+
+            result = calculate_all(inputs, output_dir=root / "output")
+            by_barcode = {row["Barkod"]: row for row in result["results"]}
+
+        both = by_barcode["BOTH"]
+        self.assertEqual(both["Plus Tarife Seçimi"], "7 Günlük Fiyat")
+        self.assertEqual((both["Plus Komisyon (%)"], both["Plus Net (TL)"]), (20, 80))
+        self.assertEqual((both["Plus Komisyon (3 Gün) (%)"], both["Plus Net (3 Gün) (TL)"]), (10, 90))
+        self.assertEqual((both["Plus Komisyon (4 Gün) (%)"], both["Plus Net (4 Gün) (TL)"]), (20, 80))
+        self.assertEqual(both["eligible_main_campaigns"].count("Plus"), 1)
+        self.assertEqual(both["Önerilen Kampanya"], "Plus")
+
+        first = by_barcode["FIRST"]
+        self.assertEqual(first["Plus Tarife Seçimi"], "3 Günlük Fiyat (11-14 Ağustos)")
+        self.assertEqual((first["Plus Komisyon (%)"], first["Plus Net (TL)"]), (11, 89))
+        self.assertEqual((first["Plus Komisyon (4 Gün) (%)"], first["Plus Net (4 Gün) (TL)"]), (19, 81))
+
+        second = by_barcode["SECOND"]
+        self.assertEqual(second["Plus Tarife Seçimi"], "4 Günlük Fiyat (14-18 Ağustos)")
+        self.assertEqual((second["Plus Komisyon (%)"], second["Plus Net (TL)"]), (12, 88))
+        self.assertEqual((second["Plus Komisyon (3 Gün) (%)"], second["Plus Net (3 Gün) (TL)"]), (18, 82))
+
+        none = by_barcode["NONE"]
+        self.assertIsNone(none["Plus Tarife Seçimi"])
+        self.assertNotIn("Plus", none["eligible_main_campaigns"])
+        self.assertEqual((none["Plus Komisyon (%)"], none["Plus Net (TL)"]), (None, None))
+        for days in (3, 4):
+            self.assertIn(f"Plus Komisyon ({days} Gün) (%)", none)
+            self.assertIn(f"Plus Net ({days} Gün) (TL)", none)
+
+    def test_variable_periods_and_price_above_upper_limit(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            inputs = write_calculation_base(root, ("VARIABLE", "TOO_HIGH"))
+            plus = root / "plus.xlsx"
+            columns = [
+                "Barkod", "Plus Fiyat Üst Limiti",
+                "Tarih Aralığı (2 Gün)", "Plus Komisyon Teklifi",
+                "Tarih Aralığı (5 Gün)", "Plus Komisyon Teklifi",
+                "7 Gün Tarih Aralığı",
+            ]
+            pd.DataFrame([
+                ["VARIABLE", 100, "1-3 Eylül", 7, "3-8 Eylül", 13, "Özel 7 Günlük Fiyat"],
+                ["TOO_HIGH", 100, "1-3 Eylül", 7, "3-8 Eylül", 13, "Özel 7 Günlük Fiyat"],
+            ], columns=columns).to_excel(plus, index=False)
+            accounting = root / "accounting-plus.xlsx"
+            pd.DataFrame([
+                {"Barkod": "TOO_HIGH", "Plus Fiyat Üst Limiti": 110},
+            ]).to_excel(accounting, index=False)
+            inputs.update({"plus": plus, "muhasebe_plus": accounting})
+
+            rows = {
+                row["Barkod"]: row
+                for row in calculate_all(inputs, output_dir=root / "output")["results"]
+            }
+
+        variable = rows["VARIABLE"]
+        self.assertEqual(variable["Plus Tarife Seçimi"], "Özel 7 Günlük Fiyat")
+        self.assertEqual(variable["Plus Komisyon (2 Gün) (%)"], 7)
+        self.assertEqual(variable["Plus Komisyon (5 Gün) (%)"], 13)
+        self.assertEqual((variable["Plus Komisyon (%)"], variable["Plus Net (TL)"]), (13, 87))
+
+        too_high = rows["TOO_HIGH"]
+        self.assertEqual(too_high["Plus Fiyatı (TL)"], 110)
+        self.assertIsNone(too_high["Plus Tarife Seçimi"])
+        self.assertNotIn("Plus", too_high["eligible_main_campaigns"])
+
+    def test_old_single_period_and_accounting_only_plus_remain_supported(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            inputs = write_calculation_base(root, ("OLD", "ACCOUNTING"), current_rate=15)
+            plus = root / "plus.xlsx"
+            pd.DataFrame([{
+                "Barkod": "OLD",
+                "Plus Fiyat Üst Limiti": 100,
+                "Tarih Aralığı (7 Gün)": "4-11 Ağustos",
+                "Plus Komisyon Teklifi": 9,
+                "Plus Fiyat Seçimi": None,
+                "Tarife Seçimi": None,
+            }]).to_excel(plus, index=False)
+            accounting = root / "accounting-plus.xlsx"
+            pd.DataFrame([{
+                "Barkod": "ACCOUNTING",
+                "Plus Fiyat Üst Limiti": 100,
+            }]).to_excel(accounting, index=False)
+            inputs.update({"plus": plus, "muhasebe_plus": accounting})
+
+            rows = {
+                row["Barkod"]: row
+                for row in calculate_all(inputs, output_dir=root / "output")["results"]
+            }
+
+        old = rows["OLD"]
+        self.assertEqual(old["Plus Tarife Seçimi"], "7 Günlük Fiyat")
+        self.assertEqual((old["Plus Komisyon (%)"], old["Plus Net (TL)"]), (9, 91))
+        self.assertEqual(old["Plus Komisyon (7 Gün) (%)"], 9)
+        self.assertIn("Plus", old["eligible_main_campaigns"])
+
+        accounting_only = rows["ACCOUNTING"]
+        self.assertEqual(accounting_only["Plus Tarife Seçimi"], "7 Günlük Fiyat")
+        self.assertEqual(
+            (accounting_only["Plus Komisyon (%)"], accounting_only["Plus Net (TL)"]),
+            (15, 85),
+        )
+        self.assertEqual(accounting_only["Plus Komisyon (7 Gün) (%)"], 15)
+        self.assertIn("Plus", accounting_only["eligible_main_campaigns"])
+
+    def test_flash_prices_are_evaluated_per_interval_with_exact_price_and_floor(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            barcodes = (
+                "MULTI", "FIXED", "FLOOR", "ALL_BELOW", "ACCOUNTING", "LEGACY",
+            )
+            inputs = write_calculation_base(root, barcodes, current_price=1200)
+            pd.DataFrame([
+                {
+                    "BARKOD": barcode,
+                    "1.Fiyat Alt Limit": 965,
+                    "2.Fiyat Üst Limiti": 964.99,
+                    "2.Fiyat Alt Limit": 0,
+                    "3.Fiyat Üst Limiti": None,
+                    "3.Fiyat Alt Limit": None,
+                    "4.Fiyat Üst Limiti": None,
+                    "1.KOMİSYON": 10,
+                    "2.KOMİSYON": 20,
+                    "3.KOMİSYON": 30,
+                    "4.KOMİSYON": 40,
+                }
+                for barcode in barcodes
+            ]).to_excel(inputs["commission"], index=False)
+            pd.DataFrame([
+                {
+                    "Barkod": "MULTI",
+                    "24 Saat Fiyat": 968.81,
+                    "24 Saat Flaş Başlangıç Tarihi": "10/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "10/08/2026 23:59",
+                },
+                {
+                    "Barkod": "MULTI",
+                    "24 Saat Fiyat": 960.64,
+                    "24 Saat Flaş Başlangıç Tarihi": "12/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "12/08/2026 23:59",
+                },
+                {
+                    "Barkod": "FIXED",
+                    "24 Saat Fiyat": 980,
+                    "3 Saat Fiyat": 970,
+                    "Senin Belirlediğin Flaş Fiyatı": 945,
+                    "24 Saat Flaş Başlangıç Tarihi": "13/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "13/08/2026 23:59",
+                    "3 Saat Flaş Başlangıç Tarihi": "13/08/2026 20:00",
+                    "3 Saat Flaş Bitiş Tarihi": "13/08/2026 22:59",
+                },
+                {
+                    "Barkod": "FLOOR",
+                    "24 Saat Fiyat": 1000,
+                    "24 Saat Flaş Başlangıç Tarihi": "14/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "14/08/2026 23:59",
+                },
+                {
+                    "Barkod": "FLOOR",
+                    "24 Saat Fiyat": 70,
+                    "24 Saat Flaş Başlangıç Tarihi": "15/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "15/08/2026 23:59",
+                },
+                {
+                    "Barkod": "ALL_BELOW",
+                    "24 Saat Fiyat": 70,
+                    "24 Saat Flaş Başlangıç Tarihi": "16/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "16/08/2026 23:59",
+                },
+                {
+                    "Barkod": "ACCOUNTING",
+                    "24 Saat Fiyat": 980,
+                    "24 Saat Flaş Başlangıç Tarihi": "17/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "17/08/2026 23:59",
+                },
+                {
+                    "Barkod": "ACCOUNTING",
+                    "24 Saat Fiyat": 970,
+                    "24 Saat Flaş Başlangıç Tarihi": "18/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "18/08/2026 23:59",
+                },
+                {"Barkod": "LEGACY"},
+            ]).to_excel(root / "flash.xlsx", index=False)
+            pd.DataFrame([{
+                "Barkod": "ACCOUNTING",
+                "24 Saat Fiyat": 955,
+                "Senin Belirlediğin Flaş Fiyatı": 955,
+                "24 Saat Flaş Başlangıç Tarihi": "18/08/2026 00:00",
+                "24 Saat Flaş Bitiş Tarihi": "18/08/2026 23:59",
+            }]).to_excel(root / "accounting-flash.xlsx", index=False)
+            inputs.update({
+                "flash": root / "flash.xlsx",
+                "muhasebe_flas": root / "accounting-flash.xlsx",
+            })
+
+            rows = {
+                row["Barkod"]: row
+                for row in calculate_all(inputs, output_dir=root / "output")["results"]
+            }
+
+        multi = rows["MULTI"]
+        self.assertEqual(
+            [(item["start"], item["price"], item["rate"], item["net"])
+             for item in multi["flash_evaluations"]],
+            [
+                ("2026-08-10 00:00:00", 968.81, 10, 871.93),
+                ("2026-08-12 00:00:00", 960.64, 20, 768.51),
+            ],
+        )
+        self.assertEqual(
+            (multi["Flaş Ürün 24 Saat Fiyatı (TL)"], multi["Flaş Ürün Komisyon (%)"]),
+            (960.64, 20),
+        )
+
+        fixed = rows["FIXED"]
+        self.assertEqual(
+            [(item["period"], item["price"], item["source"])
+             for item in fixed["flash_evaluations"]],
+            [
+                ("24 Saat", 945, "Senin Belirlediğin Flaş Fiyatı"),
+                ("3 Saat", 945, "Senin Belirlediğin Flaş Fiyatı"),
+            ],
+        )
+
+        floor = rows["FLOOR"]
+        self.assertEqual(
+            [(item["price"], item["eligible"]) for item in floor["flash_evaluations"]],
+            [(1000, True), (70, False)],
+        )
+        self.assertEqual(floor["Flaş Ürün 24 Saat Fiyatı (TL)"], 1000)
+        self.assertIn("Flaş", floor["eligible_main_campaigns"])
+        self.assertNotIn("Flaş", rows["ALL_BELOW"]["eligible_main_campaigns"])
+        self.assertEqual(rows["ALL_BELOW"]["Flaş Ürün 24 Saat Fiyatı (TL)"], 70)
+
+        legacy = rows["LEGACY"]
+        self.assertEqual(legacy["Flaş Ürün 24 Saat Fiyatı (TL)"], 1200)
+        self.assertEqual(legacy["flash_evaluations"][0]["source"], "Mevcut Fiyat")
+        self.assertNotIn("Flaş", legacy["eligible_main_campaigns"])
+
+        accounting = rows["ACCOUNTING"]
+        self.assertEqual(
+            [(item["start"], item["price"], item["origin"], item["source"])
+             for item in accounting["flash_evaluations"]],
+            [
+                ("2026-08-17 00:00:00", 980, "kampanya", "24 Saat Fiyat"),
+                (
+                    "2026-08-18 00:00:00",
+                    955,
+                    "muhasebe",
+                    "Senin Belirlediğin Flaş Fiyatı",
+                ),
+            ],
+        )
+
+    def test_undated_accounting_flash_price_is_ignored_for_multiple_standard_intervals(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            inputs = write_calculation_base(root, ("FIXED",), current_price=200, current_rate=10)
+            pd.DataFrame([
+                {
+                    "Barkod": "FIXED",
+                    "24 Saat Fiyat": 120,
+                    "24 Saat Flaş Başlangıç Tarihi": "10/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "10/08/2026 23:59",
+                },
+                {
+                    "Barkod": "FIXED",
+                    "24 Saat Fiyat": 110,
+                    "24 Saat Flaş Başlangıç Tarihi": "12/08/2026 00:00",
+                    "24 Saat Flaş Bitiş Tarihi": "12/08/2026 23:59",
+                },
+            ]).to_excel(root / "flash.xlsx", index=False)
+            pd.DataFrame([{
+                "Barkod": "FIXED",
+                "Senin Belirlediğin Flaş Fiyatı": 95,
+            }]).to_excel(root / "accounting-flash.xlsx", index=False)
+            inputs.update({
+                "flash": root / "flash.xlsx",
+                "muhasebe_flas": root / "accounting-flash.xlsx",
+            })
+
+            row = calculate_all(inputs, output_dir=root / "output")["results"][0]
+
+        self.assertEqual(
+            [(item["start"], item["price"], item["origin"], item["source"])
+             for item in row["flash_evaluations"]],
+            [
+                ("2026-08-10 00:00:00", 120, "kampanya", "24 Saat Fiyat"),
+                ("2026-08-12 00:00:00", 110, "kampanya", "24 Saat Fiyat"),
+            ],
+        )
+        self.assertEqual(row["Flaş Ürün 24 Saat Fiyatı (TL)"], 110)
+
+    def test_plus_fixed_selection_precedes_upper_limit_for_standard_and_accounting(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            inputs = write_calculation_base(root, ("STANDARD", "ACCOUNTING"))
+            plus = root / "plus.xlsx"
+            pd.DataFrame([
+                {
+                    "Barkod": "STANDARD",
+                    "Plus Fiyat Seçimi": 90,
+                    "Plus Fiyat Üst Limiti": 100,
+                    "Tarih Aralığı (7 Gün)": "11-18 Ağustos",
+                    "Plus Komisyon Teklifi": 10,
+                },
+                {
+                    "Barkod": "ACCOUNTING",
+                    "Plus Fiyat Seçimi": None,
+                    "Plus Fiyat Üst Limiti": 100,
+                    "Tarih Aralığı (7 Gün)": "11-18 Ağustos",
+                    "Plus Komisyon Teklifi": 10,
+                },
+            ]).to_excel(plus, index=False)
+            accounting = root / "accounting-plus.xlsx"
+            pd.DataFrame([{
+                "Barkod": "ACCOUNTING",
+                "Plus Fiyat Seçimi": 85,
+                "Plus Fiyat Üst Limiti": 95,
+            }]).to_excel(accounting, index=False)
+            inputs.update({"plus": plus, "muhasebe_plus": accounting})
+
+            rows = {
+                row["Barkod"]: row
+                for row in calculate_all(inputs, output_dir=root / "output")["results"]
+            }
+
+        self.assertEqual(rows["STANDARD"]["Plus Fiyatı (TL)"], 90)
+        self.assertEqual(rows["ACCOUNTING"]["Plus Fiyatı (TL)"], 85)
 
 
 if __name__ == "__main__":

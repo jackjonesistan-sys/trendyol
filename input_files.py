@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import re
 import tempfile
 import threading
 import zipfile
@@ -112,6 +113,56 @@ class InputValidationError(ValueError):
 
 
 MAIN_CAMPAIGN_PRIORITY = ("Avantajlı", "Flaş", "Plus")
+
+_PLUS_PERIOD_COLUMN = re.compile(r"Tarih Aralığı \((\d+) Gün\)", re.IGNORECASE)
+_PLUS_OFFER_COLUMN = re.compile(r"Plus Komisyon Teklifi(?:\.\d+)?", re.IGNORECASE)
+
+
+def find_plus_period_columns(columns):
+    column_keys = list(columns)
+    periods = []
+    for date_position, date_column in enumerate(column_keys[:-1]):
+        match = _PLUS_PERIOD_COLUMN.fullmatch(str(date_column).strip())
+        offer_position = date_position + 1
+        offer_column = column_keys[offer_position]
+        if not match or not _PLUS_OFFER_COLUMN.fullmatch(str(offer_column).strip()):
+            continue
+        periods.append({
+            "days": int(match.group(1)),
+            "date_position": date_position,
+            "offer_position": offer_position,
+            "date_column": date_column,
+            "offer_column": offer_column,
+        })
+    return periods
+
+
+def _plus_cell_value(row, column):
+    value = row.get(column) if hasattr(row, "get") else None
+    return None if value is None or pd.isna(value) or str(value).strip() == "" else value
+
+
+def choose_plus_tariff_label(row, periods, eligible_days):
+    periods = list(periods)
+    eligible_days = set(eligible_days)
+    eligible = [period for period in periods if period["days"] in eligible_days]
+    if not eligible:
+        return None
+
+    if len(eligible) == len(periods):
+        days = sum(period["days"] for period in periods)
+        return _plus_cell_value(row, f"{days} Gün Tarih Aralığı") or f"{days} Günlük Fiyat"
+
+    if len(eligible) == 1:
+        period = eligible[0]
+        days = period["days"]
+        helper_value = _plus_cell_value(row, f"{days} Gün Tarih Aralığı")
+        if helper_value is not None:
+            return helper_value
+        date_value = _plus_cell_value(row, period["date_column"])
+        return f"{days} Günlük Fiyat ({date_value})" if date_value is not None else None
+
+    return None
 
 
 def normalize_recommendation_rule(rule=None):

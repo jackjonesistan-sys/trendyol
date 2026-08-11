@@ -185,6 +185,27 @@ class TemplateContractTests(unittest.TestCase):
         self.assertNotIn("function addRuleRow()", self.template)
         self.assertNotIn("function changeRuleType(", self.template)
 
+    def test_campaign_cells_contain_wrapped_controls_and_badges(self):
+        self.assertEqual(
+            self.template.count(
+                'class="flex w-[220px] min-w-[220px] flex-col gap-1"'
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.template.count(
+                'class="flex max-w-full flex-wrap items-start gap-1"'
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.template.count(
+                "badge-xs h-auto min-h-5 max-w-full justify-start whitespace-normal "
+                "break-words px-2 py-1 text-left text-[10px] leading-tight rounded-md"
+            ),
+            2,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

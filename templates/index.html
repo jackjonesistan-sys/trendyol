@@ -2295,7 +2295,7 @@
 
             const safeEligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : ['Hiçbiri'];
 
-            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
+            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
 
             matching.forEach(cName => {
                 const isSelected = (row.userSelection || 'Hiçbiri') === cName;
@@ -2315,11 +2315,11 @@
                     const isSafe = safeEligible.includes(cName);
                     const badgeClass = isSafe ? 'badge-outline badge-primary font-semibold' : 'badge-outline border-warning/80 text-warning font-medium';
                     const titleAttr = isSafe ? '' : ' title="Fiyat dip fiyat sınırının altındadır"';
-                    return `<span class="badge ${badgeClass} badge-xs text-[10px] rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
+                    return `<span class="badge ${badgeClass} badge-xs h-auto min-h-5 max-w-full justify-start whitespace-normal break-words px-2 py-1 text-left text-[10px] leading-tight rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
                 })
                 .join(' ');
 
-            return `<div class="flex flex-col gap-1">${selectHtml}<div class="flex flex-wrap gap-1 max-w-[210px]">${badges || '<span class="text-[10px] text-base-content/40">Ana Kampanya Yok</span>'}</div></div>`;
+            return `<div class="flex w-[220px] min-w-[220px] flex-col gap-1">${selectHtml}<div class="flex max-w-full flex-wrap items-start gap-1">${badges || '<span class="text-[10px] text-base-content/40">Ana Kampanya Yok</span>'}</div></div>`;
         }
 
         function extraSelectionHtml(row) {
@@ -2351,7 +2351,7 @@
             const matchingList = Array.from(extraSet);
             const safeEligible = Array.isArray(row.eligible_extra_campaigns) ? row.eligible_extra_campaigns : ['Hiçbiri'];
 
-            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ekstra kampanya seçimi" class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
+            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ekstra kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
 
             matchingList.forEach(cName => {
                 const isSelected = (row.userExtraSelection || 'Hiçbiri') === cName;
@@ -2372,11 +2372,11 @@
                     const isSafe = safeEligible.includes(cName);
                     const badgeClass = isSafe ? 'badge-outline badge-accent font-semibold' : 'badge-outline border-warning/80 text-warning font-medium';
                     const titleAttr = isSafe ? '' : ' title="Fiyat dip fiyat sınırının altındadır"';
-                    return `<span class="badge ${badgeClass} badge-xs text-[10px] rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
+                    return `<span class="badge ${badgeClass} badge-xs h-auto min-h-5 max-w-full justify-start whitespace-normal break-words px-2 py-1 text-left text-[10px] leading-tight rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
                 })
                 .join(' ');
 
-            return `<div class="flex flex-col gap-1">${selectHtml}<div class="flex flex-wrap gap-1 max-w-[210px]">${badges || '<span class="text-[10px] text-base-content/40">Ekstra Kampanya Yok</span>'}</div></div>`;
+            return `<div class="flex w-[220px] min-w-[220px] flex-col gap-1">${selectHtml}<div class="flex max-w-full flex-wrap items-start gap-1">${badges || '<span class="text-[10px] text-base-content/40">Ekstra Kampanya Yok</span>'}</div></div>`;
         }
 
         function renderTable() {

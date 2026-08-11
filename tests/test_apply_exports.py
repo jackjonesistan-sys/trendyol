@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 import openpyxl
 import pandas as pd
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.table import Table
 
 import app
 
@@ -121,6 +123,685 @@ class ApplyExportTests(unittest.TestCase):
                 price_column = headers.index(case["price_header"]) + 1
                 self.assertEqual(exported.cell(2, barcode_column).value, barcode)
                 self.assertEqual(exported.cell(2, price_column).value, case["price"])
+                if case["campaign"] == "Plus":
+                    self.assertEqual(
+                        exported.cell(2, headers.index("Tarife Seçimi") + 1).value,
+                        "7 Günlük Fiyat",
+                    )
+
+    def test_flash_export_uses_each_interval_evaluation_price(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            headers = [
+                "Barkod",
+                "Güncellenecek Fiyat",
+                "24 Saat Fiyat",
+                "Senin Belirlediğin Flaş Fiyatı",
+                "24 Saat Flaş Başlangıç Tarihi",
+                "24 Saat Flaş Bitiş Tarihi",
+            ]
+            write_workbook(
+                source,
+                headers,
+                [
+                    ["ST34-4070", None, 968.81, None, "10/08/2026 00:00", "10/08/2026 23:59"],
+                    ["ST34-4070", None, 960.64, None, "12/08/2026 00:00", "12/08/2026 23:59"],
+                ],
+            )
+            row = {
+                "Barkod": "ST34-4070",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 968.81,
+                "flash_evaluations": [
+                    {
+                        "period": "24 Saat",
+                        "start": "2026-08-10 00:00:00",
+                        "end": "2026-08-10 23:59:00",
+                        "price": 968.81,
+                        "rate": 19.1,
+                        "net": 783.77,
+                        "eligible": True,
+                        "source": "24 Saat Fiyat",
+                    },
+                    {
+                        "period": "24 Saat",
+                        "start": "12/08/2026 00:00",
+                        "end": "12/08/2026 23:59",
+                        "price": 960.64,
+                        "rate": 19.1,
+                        "net": 777.16,
+                        "eligible": True,
+                        "source": "24 Saat Fiyat",
+                    },
+                ],
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {
+                        "ST34-4070": {"main": "Flaş", "extra": "Hiçbiri"}
+                    },
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            run_dir = output_dir / response.get_json()["timestamp_folder"]
+            expected = {
+                "Flas_Urunler_10_08_2026.xlsx": 968.81,
+                "Flas_Urunler_12_08_2026.xlsx": 960.64,
+            }
+            flash_names = {
+                Path(name).name
+                for name in response.get_json()["generated_files"]
+                if Path(name).name.startswith("Flas_Urunler_")
+            }
+            self.assertEqual(flash_names, set(expected))
+            for filename, price in expected.items():
+                exported = openpyxl.load_workbook(run_dir / filename).active
+                output_headers = [cell.value for cell in exported[1]]
+                self.assertEqual(exported.max_row, 2)
+                self.assertEqual(
+                    exported.cell(2, output_headers.index("24 Saat Fiyat") + 1).value,
+                    price,
+                )
+                self.assertEqual(
+                    exported.cell(2, output_headers.index("Güncellenecek Fiyat") + 1).value,
+                    "24 Saat",
+                )
+
+    def test_flash_export_omits_ineligible_interval_and_applies_fixed_price_column(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            headers = [
+                "Barkod",
+                "Güncellenecek Fiyat",
+                "24 Saat Fiyat",
+                "Senin Belirlediğin Flaş Fiyatı",
+                "24 Saat Flaş Başlangıç Tarihi",
+                "24 Saat Flaş Bitiş Tarihi",
+            ]
+            write_workbook(
+                source,
+                headers,
+                [
+                    ["FIXED", None, 999, 950.25, "10/08/2026 00:00", "10/08/2026 23:59"],
+                    ["FIXED", None, 930, 920, "12/08/2026 00:00", "12/08/2026 23:59"],
+                ],
+            )
+            row = {
+                "Barkod": "FIXED",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 999,
+                "flash_evaluations": [
+                    {
+                        "period": "24 Saat",
+                        "start": "10/08/2026 00:00",
+                        "end": "10/08/2026 23:59",
+                        "price": 950.25,
+                        "rate": 19.1,
+                        "net": 768.75,
+                        "eligible": True,
+                        "source": "Senin Belirlediğin Flaş Fiyatı",
+                    },
+                    {
+                        "period": "24 Saat",
+                        "start": "12/08/2026 00:00",
+                        "end": "12/08/2026 23:59",
+                        "price": 920,
+                        "rate": 19.1,
+                        "net": 744.28,
+                        "eligible": False,
+                        "source": "Senin Belirlediğin Flaş Fiyatı",
+                    },
+                ],
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {"FIXED": {"main": "Flaş", "extra": "Hiçbiri"}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            flash_names = [
+                Path(name).name
+                for name in response.get_json()["generated_files"]
+                if Path(name).name.startswith("Flas_Urunler_")
+            ]
+            self.assertEqual(flash_names, ["Flas_Urunler_10_08_2026.xlsx"])
+            exported = openpyxl.load_workbook(
+                output_dir / response.get_json()["timestamp_folder"] / flash_names[0]
+            ).active
+            output_headers = [cell.value for cell in exported[1]]
+            self.assertEqual(
+                exported.cell(
+                    2,
+                    output_headers.index("Senin Belirlediğin Flaş Fiyatı") + 1,
+                ).value,
+                950.25,
+            )
+            self.assertEqual(
+                exported.cell(2, output_headers.index("Güncellenecek Fiyat") + 1).value,
+                "Senin Belirlediğin Flaş Fiyatı",
+            )
+
+    def test_flash_export_binds_single_undated_accounting_fixed_price_to_template_interval(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            standard = root / "flash.xlsx"
+            accounting = root / "accounting.xlsx"
+            write_workbook(
+                standard,
+                [
+                    "Barkod",
+                    "Güncellenecek Fiyat",
+                    "24 Saat Fiyat",
+                    "24 Saat Flaş Başlangıç Tarihi",
+                    "24 Saat Flaş Bitiş Tarihi",
+                ],
+                [["FIXED", None, 999, "10/08/2026 00:00", "10/08/2026 23:59"]],
+            )
+            write_workbook(
+                accounting,
+                ["Barkod", "Senin Belirlediğin Flaş Fiyatı"],
+                [["FIXED", 950.25]],
+            )
+            row = {
+                "Barkod": "FIXED",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "flash_evaluations": [{
+                    "period": "24 Saat",
+                    "start": None,
+                    "end": None,
+                    "price": 950.25,
+                    "rate": 19.1,
+                    "net": 768.75,
+                    "eligible": True,
+                    "source": "Senin Belirlediğin Flaş Fiyatı",
+                }],
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(standard), "muhasebe_flas": str(accounting)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {"FIXED": {"main": "Flaş", "extra": "Hiçbiri"}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            filename = "Flas_Urunler_10_08_2026.xlsx"
+            generated = {Path(name).name for name in response.get_json()["generated_files"]}
+            self.assertIn(filename, generated)
+            exported = openpyxl.load_workbook(
+                output_dir / response.get_json()["timestamp_folder"] / filename
+            ).active
+            output_headers = [cell.value for cell in exported[1]]
+            self.assertEqual(
+                exported.cell(
+                    2,
+                    output_headers.index("Senin Belirlediğin Flaş Fiyatı") + 1,
+                ).value,
+                950.25,
+            )
+            self.assertEqual(
+                exported.cell(2, output_headers.index("Güncellenecek Fiyat") + 1).value,
+                "Senin Belirlediğin Flaş Fiyatı",
+            )
+
+    def test_flash_export_rejects_undated_fixed_evaluation_for_multiple_intervals(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            write_workbook(
+                source,
+                [
+                    "Barkod",
+                    "Güncellenecek Fiyat",
+                    "24 Saat Fiyat",
+                    "24 Saat Flaş Başlangıç Tarihi",
+                    "24 Saat Flaş Bitiş Tarihi",
+                ],
+                [
+                    ["FIXED", None, 999, "10/08/2026 00:00", "10/08/2026 23:59"],
+                    ["FIXED", None, 990, "12/08/2026 00:00", "12/08/2026 23:59"],
+                ],
+            )
+            row = {
+                "Barkod": "FIXED",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "flash_evaluations": [{
+                    "period": "24 Saat",
+                    "start": None,
+                    "end": None,
+                    "price": 950.25,
+                    "rate": 19.1,
+                    "net": 768.75,
+                    "eligible": True,
+                    "source": "Senin Belirlediğin Flaş Fiyatı",
+                }],
+            }
+
+            response, _output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {"FIXED": {"main": "Flaş", "extra": "Hiçbiri"}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 400, response.get_json())
+            self.assertIn("yeniden hesaplayın", response.get_json()["message"])
+
+    def test_flash_legacy_scalar_is_not_repeated_across_duplicate_intervals(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            write_workbook(
+                source,
+                [
+                    "Barkod",
+                    "Güncellenecek Fiyat",
+                    "24 Saat Fiyat",
+                    "24 Saat Flaş Başlangıç Tarihi",
+                    "24 Saat Flaş Bitiş Tarihi",
+                ],
+                [
+                    ["LEGACY", None, 968.81, "10/08/2026 00:00", "10/08/2026 23:59"],
+                    ["LEGACY", None, 960.64, "12/08/2026 00:00", "12/08/2026 23:59"],
+                ],
+            )
+            row = {
+                "Barkod": "LEGACY",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 968.81,
+            }
+
+            response, _output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {
+                        "LEGACY": {"main": "Flaş", "extra": "Hiçbiri"}
+                    },
+                },
+            )
+
+            self.assertEqual(response.status_code, 400, response.get_json())
+            self.assertIn("yeniden hesaplayın", response.get_json()["message"])
+
+    def test_flash_export_separates_24_and_3_hour_intervals_on_same_date(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            write_workbook(
+                source,
+                [
+                    "Barkod",
+                    "Güncellenecek Fiyat",
+                    "24 Saat Fiyat",
+                    "3 Saat Fiyat",
+                    "24 Saat Flaş Başlangıç Tarihi",
+                    "24 Saat Flaş Bitiş Tarihi",
+                    "3 Saat Flaş Başlangıç Tarihi",
+                    "3 Saat Flaş Bitiş Tarihi",
+                ],
+                [[
+                    "BOTH",
+                    None,
+                    900,
+                    925,
+                    "13/08/2026 00:00",
+                    "13/08/2026 23:59",
+                    "13/08/2026 10:00",
+                    "13/08/2026 12:59",
+                ]],
+            )
+            row = {
+                "Barkod": "BOTH",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "flash_evaluations": [
+                    {
+                        "period": "24 Saat",
+                        "start": "13/08/2026 00:00",
+                        "end": "13/08/2026 23:59",
+                        "price": 900,
+                        "rate": 19,
+                        "net": 729,
+                        "eligible": True,
+                        "source": "24 Saat Fiyat",
+                    },
+                    {
+                        "period": "3 Saat",
+                        "start": "13/08/2026 10:00",
+                        "end": "13/08/2026 12:59",
+                        "price": 925,
+                        "rate": 18,
+                        "net": 758.5,
+                        "eligible": True,
+                        "source": "3 Saat Fiyat",
+                    },
+                ],
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {"BOTH": {"main": "Flaş", "extra": "Hiçbiri"}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            run_dir = output_dir / response.get_json()["timestamp_folder"]
+            expected = {
+                "Flas_Urunler_13_08_2026.xlsx": ("24 Saat Fiyat", 900, "24 Saat"),
+                "Flas_Urunler_13_08_2026_3_Saat.xlsx": ("3 Saat Fiyat", 925, "3 Saat"),
+            }
+            names = {
+                Path(name).name
+                for name in response.get_json()["generated_files"]
+                if Path(name).name.startswith("Flas_Urunler_")
+            }
+            self.assertEqual(names, set(expected))
+            for filename, (price_header, price, selection) in expected.items():
+                exported = openpyxl.load_workbook(run_dir / filename).active
+                output_headers = [cell.value for cell in exported[1]]
+                self.assertEqual(
+                    exported.cell(2, output_headers.index(price_header) + 1).value,
+                    price,
+                )
+                self.assertEqual(
+                    exported.cell(2, output_headers.index("Güncellenecek Fiyat") + 1).value,
+                    selection,
+                )
+
+    def test_flash_export_keeps_price_only_three_hour_interval(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "flash.xlsx"
+            write_workbook(
+                source,
+                ["Barkod", "Güncellenecek Fiyat", "24 Saat Fiyat", "3 Saat Fiyat"],
+                [["THREE", None, None, 925]],
+            )
+            row = {
+                "Barkod": "THREE",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": "Flaş",
+                "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+                "eligible_extra_campaigns": ["Hiçbiri"],
+                "flash_evaluations": [{
+                    "period": "3 Saat",
+                    "start": None,
+                    "end": None,
+                    "price": 925,
+                    "rate": 18,
+                    "net": 758.5,
+                    "eligible": True,
+                    "source": "3 Saat Fiyat",
+                }],
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {"flash": str(source)},
+                {
+                    "target_type": "Flaş",
+                    "selections": {"THREE": {"main": "Flaş", "extra": "Hiçbiri"}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            filename = "Flas_Urunler_Genel_3_Saat.xlsx"
+            generated = {Path(name).name for name in response.get_json()["generated_files"]}
+            self.assertIn(filename, generated)
+            exported = openpyxl.load_workbook(
+                output_dir / response.get_json()["timestamp_folder"] / filename
+            ).active
+            output_headers = [cell.value for cell in exported[1]]
+            self.assertEqual(
+                exported.cell(2, output_headers.index("3 Saat Fiyat") + 1).value,
+                925,
+            )
+            self.assertEqual(
+                exported.cell(2, output_headers.index("Güncellenecek Fiyat") + 1).value,
+                "3 Saat",
+            )
+
+    def test_plus_multi_period_export_groups_all_intervals_and_preserves_template(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "plus.xlsx"
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            headers = [
+                "Barkod",
+                "Tarih Aralığı (2 Gün)",
+                "Plus Komisyon Teklifi",
+                "Hesaplanan Komisyon (2 Gün)",
+                "Tarih Aralığı (5 Gün)",
+                "Plus Komisyon Teklifi",
+                "Hesaplanan Komisyon (5 Gün)",
+                "Plus Fiyat Üst Limiti",
+                "Plus Fiyat Seçimi",
+                "Tarife Seçimi",
+                "İptal",
+                "2 Gün Tarih Aralığı",
+                "5 Gün Tarih Aralığı",
+                "7 Gün Tarih Aralığı",
+            ]
+            sheet.append(headers)
+            interval_2 = "11.08.2026 - 12.08.2026"
+            interval_5 = "20.08.2026 - 24.08.2026"
+            label_2 = "2 Günlük Fiyat (11 Ağustos 08.00-13 Ağustos 07.59)"
+            label_5 = "5 Günlük Fiyat (20 Ağustos 08.00-25 Ağustos 07.59)"
+            source_rows = (
+                (
+                    "BOTH", interval_2, 12, None, interval_5, 15, None, 99,
+                    None, None, None, label_2, label_5, "7 Günlük Fiyat",
+                ),
+                (
+                    "FIRST", interval_2, 13, None, None, None, None, 89,
+                    None, None, None, label_2, None, None,
+                ),
+                (
+                    "SECOND", None, None, None, interval_5, 16, None, 79,
+                    None, None, None, label_5, None, None,
+                ),
+            )
+            for row_number, values in enumerate(source_rows, 2):
+                sheet.append(values)
+                sheet.cell(row_number, 4).value = f'=IF(C{row_number}="","-",C{row_number}*2)'
+                sheet.cell(row_number, 7).value = f'=IF(F{row_number}="","-",F{row_number}*2)'
+                sheet.cell(row_number, 11).value = f'=IF(ISBLANK(I{row_number}),"","Hayır")'
+                sheet.cell(row_number, 4).number_format = "0.00"
+                sheet.cell(row_number, 7).number_format = "0.00"
+            validation = DataValidation(
+                type="list",
+                formula1="OFFSET($L2,0,0,1,COUNTA($L2:$N2))",
+            )
+            sheet.add_data_validation(validation)
+            validation.add("J2:J4")
+            sheet.add_table(Table(displayName="PlusTarifeleri", ref="A1:N4"))
+            workbook.save(source)
+
+            tariffs = {
+                "BOTH": (91, "7 Günlük Fiyat"),
+                "FIRST": (81, label_2),
+                "SECOND": (71, label_5),
+            }
+            rows = [
+                {
+                    "Barkod": barcode,
+                    "Stok Adedi": 1,
+                    "Uygulanabilir Kampanyalar": "Plus",
+                    "eligible_main_campaigns": ["Hiçbiri", "Plus"],
+                    "eligible_extra_campaigns": ["Hiçbiri"],
+                    "Plus Fiyatı (TL)": price,
+                    "Plus Tarife Seçimi": tariff,
+                }
+                for barcode, (price, tariff) in tariffs.items()
+            ]
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                rows,
+                {"plus": str(source)},
+                {
+                    "target_type": "Plus",
+                    "selections": {
+                        barcode: {"main": "Plus", "extra": "Hiçbiri"}
+                        for barcode in tariffs
+                    },
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            plus_files = [
+                output_dir / name
+                for name in response.get_json()["generated_files"]
+                if Path(name).name.startswith("Plus_Komisyon_Tarifeleri")
+            ]
+            self.assertEqual(len(plus_files), 3)
+            exports = {}
+            for path in plus_files:
+                exported = openpyxl.load_workbook(path, data_only=False).active
+                self.assertEqual(exported.max_row, 2)
+                barcode = exported["A2"].value
+                exports[barcode] = exported
+                self.assertEqual(
+                    [cell.value for cell in exported[1]].count("Plus Komisyon Teklifi"),
+                    2,
+                )
+                self.assertEqual(exported["D2"].value, '=IF(C2="","-",C2*2)')
+                self.assertEqual(exported["G2"].value, '=IF(F2="","-",F2*2)')
+                self.assertEqual(exported["K2"].value, '=IF(ISBLANK(I2),"","Hayır")')
+                self.assertEqual(exported["D2"].number_format, "0.00")
+                self.assertEqual(exported["G2"].number_format, "0.00")
+                self.assertIn("PlusTarifeleri", exported.tables)
+                self.assertEqual(exported.tables["PlusTarifeleri"].ref, "A1:N2")
+                self.assertEqual(len(exported.data_validations.dataValidation), 1)
+                output_validation = exported.data_validations.dataValidation[0]
+                self.assertEqual(str(output_validation.sqref), "J2")
+                self.assertEqual(output_validation.formula1, validation.formula1)
+
+            self.assertEqual(set(exports), set(tariffs))
+            for barcode, (price, tariff) in tariffs.items():
+                self.assertEqual(exports[barcode]["I2"].value, price)
+                self.assertEqual(exports[barcode]["J2"].value, tariff)
+
+    def test_plus_legacy_results_use_detected_day_sum_and_price_fallback(self):
+        cases = (
+            (
+                ["Tarih Aralığı (9 Gün)", "Plus Komisyon Teklifi"],
+                ["11.08.2026 - 19.08.2026", 12],
+                88,
+                "9 Günlük Fiyat",
+                "Plus_Komisyon_Tarifeleri_11.08.2026_-_19.08.2026.xlsx",
+            ),
+            (
+                [
+                    "Tarih Aralığı (2 Gün)",
+                    "Plus Komisyon Teklifi",
+                    "Tarih Aralığı (5 Gün)",
+                    "Plus Komisyon Teklifi",
+                ],
+                ["11.08.2026 - 12.08.2026", 12, "20.08.2026 - 24.08.2026", 15],
+                None,
+                "7 Günlük Fiyat",
+                None,
+            ),
+        )
+        for period_headers, period_values, result_price, expected_tariff, expected_name in cases:
+            with self.subTest(tariff=expected_tariff), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                source = root / "plus.xlsx"
+                write_workbook(
+                    source,
+                    [
+                        "Barkod",
+                        *period_headers,
+                        "Plus Fiyat Üst Limiti",
+                        "Plus Fiyat Seçimi",
+                        "Tarife Seçimi",
+                    ],
+                    [["LEGACY", *period_values, 90, None, None]],
+                )
+                row = {
+                    "Barkod": "LEGACY",
+                    "Stok Adedi": 1,
+                    "Uygulanabilir Kampanyalar": "Plus",
+                    "eligible_main_campaigns": ["Hiçbiri", "Plus"],
+                    "eligible_extra_campaigns": ["Hiçbiri"],
+                }
+                if result_price is not None:
+                    row["Plus Fiyatı (TL)"] = result_price
+
+                response, output_dir = self.apply_from_temp(
+                    root,
+                    [row],
+                    {"plus": str(source)},
+                    {
+                        "target_type": "Plus",
+                        "selections": {"LEGACY": {"main": "Plus", "extra": "Hiçbiri"}},
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200, response.get_json())
+                output_name = next(
+                    name for name in response.get_json()["generated_files"]
+                    if Path(name).name.startswith("Plus_Komisyon_Tarifeleri")
+                )
+                if expected_name:
+                    self.assertEqual(Path(output_name).name, expected_name)
+                exported = openpyxl.load_workbook(output_dir / output_name).active
+                exported_headers = [cell.value for cell in exported[1]]
+                self.assertEqual(
+                    exported.cell(2, exported_headers.index("Plus Fiyat Seçimi") + 1).value,
+                    result_price if result_price is not None else 90,
+                )
+                self.assertEqual(
+                    exported.cell(2, exported_headers.index("Tarife Seçimi") + 1).value,
+                    expected_tariff,
+                )
 
     def test_standard_template_wins_duplicates_and_accounting_only_row_is_appended(self):
         with tempfile.TemporaryDirectory() as temp_dir:

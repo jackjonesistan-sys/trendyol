@@ -1,10 +1,13 @@
 import os
 import math
+from datetime import date, datetime
 import pandas as pd
 from pathlib import Path
 
 from input_files import (
     build_campaign_label,
+    choose_plus_tariff_label,
+    find_plus_period_columns,
     normalize_campaign_config,
     normalize_recommendation_rule,
 )
@@ -194,6 +197,132 @@ def build_extra_evaluation(base_price, commission_rate, config):
     }
 
 
+FLASH_PERIOD_COLUMNS = (
+    (
+        "24 Saat",
+        "24 Saat Fiyat",
+        "24 Saat Flaş Başlangıç Tarihi",
+        "24 Saat Flaş Bitiş Tarihi",
+    ),
+    (
+        "3 Saat",
+        "3 Saat Fiyat",
+        "3 Saat Flaş Başlangıç Tarihi",
+        "3 Saat Flaş Bitiş Tarihi",
+    ),
+)
+
+
+def normalize_flash_interval_value(value):
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return pd.Timestamp(value).strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).strip()
+    if not text:
+        return None
+    for date_format in (
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+    ):
+        try:
+            return datetime.strptime(text, date_format).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return text
+
+
+def flash_interval_candidates(rows, origin):
+    candidates = []
+    for row in rows:
+        fixed_price = to_float(row.get("Senin Belirlediğin Flaş Fiyatı"))
+        row_candidates = []
+        for period, price_column, start_column, end_column in FLASH_PERIOD_COLUMNS:
+            period_price = to_float(row.get(price_column))
+            start = normalize_flash_interval_value(row.get(start_column))
+            end = normalize_flash_interval_value(row.get(end_column))
+            interval_exists = period_price is not None or start is not None or end is not None
+            if not interval_exists:
+                continue
+            price = fixed_price if fixed_price is not None and fixed_price > 0 else period_price
+            source = "Senin Belirlediğin Flaş Fiyatı" if price == fixed_price else price_column
+            if (price is None or price <= 0) and origin == "muhasebe":
+                price = to_float(row.get("Mevcut Fiyat"))
+                source = "Mevcut Fiyat"
+            if price is not None and price > 0:
+                row_candidates.append({
+                    "period": period,
+                    "start": start,
+                    "end": end,
+                    "price": price,
+                    "source": source,
+                    "origin": origin,
+                    "used_current_price": False,
+                })
+
+        legacy_price = fixed_price
+        legacy_source = "Senin Belirlediğin Flaş Fiyatı"
+        if (legacy_price is None or legacy_price <= 0) and origin == "muhasebe":
+            legacy_price = to_float(row.get("Mevcut Fiyat"))
+            legacy_source = "Mevcut Fiyat"
+        if not row_candidates and legacy_price is not None and legacy_price > 0:
+            row_candidates.append({
+                "period": "24 Saat",
+                "start": None,
+                "end": None,
+                "price": legacy_price,
+                "source": legacy_source,
+                "origin": origin,
+                "used_current_price": False,
+            })
+        candidates.extend(row_candidates)
+    return candidates
+
+
+def merge_flash_intervals(campaign_intervals, accounting_intervals):
+    if not campaign_intervals:
+        return list(accounting_intervals)
+
+    used_accounting = set()
+    period_counts = {
+        period: sum(item["period"] == period for item in campaign_intervals)
+        for period in {item["period"] for item in campaign_intervals}
+    }
+    merged = []
+    for campaign_interval in campaign_intervals:
+        key = tuple(campaign_interval[field] for field in ("period", "start", "end"))
+        exact_matches = [
+            index
+            for index, item in enumerate(accounting_intervals)
+            if index not in used_accounting
+            and tuple(item[field] for field in ("period", "start", "end")) == key
+        ]
+        match_index = exact_matches[0] if len(exact_matches) == 1 else None
+        if not exact_matches and period_counts[campaign_interval["period"]] == 1:
+            generic_matches = [
+                index
+                for index, item in enumerate(accounting_intervals)
+                if index not in used_accounting
+                if item["period"] == campaign_interval["period"]
+                and item["start"] is None
+                and item["end"] is None
+            ]
+            match_index = generic_matches[0] if len(generic_matches) == 1 else None
+        if match_index is None:
+            merged.append(campaign_interval)
+        else:
+            used_accounting.add(match_index)
+            merged.append({
+                **accounting_intervals[match_index],
+                "period": campaign_interval["period"],
+                "start": campaign_interval["start"],
+                "end": campaign_interval["end"],
+            })
+    return merged
+
+
 def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None, recommendation_rule=None):
     recommendation_rule = normalize_recommendation_rule(recommendation_rule)
     required = ('discount', 'commission', 'current')
@@ -327,6 +456,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     except Exception as e:
         return {"success": False, "message": f"Excel dosyaları okunurken hata oluştu: {str(e)}"}
 
+    plus_periods = find_plus_period_columns(df_plus.columns)
+
     df_tr['BARKOD_CLN'] = df_tr['BARKOD'].astype(str).str.strip()
     if 'Durum' in df_tr.columns:
         indirimli = df_tr[df_tr['Durum'].astype(str).str.contains('ndirim', case=False, na=False)]
@@ -355,22 +486,32 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         if df.empty or key_col not in df.columns: return {}
         return df.drop_duplicates(subset=[key_col]).set_index(key_col).to_dict('index')
 
+    def to_rows_safe(df, key_col):
+        if df.empty or key_col not in df.columns:
+            return {}
+        return {
+            str(key).strip(): group.to_dict('records')
+            for key, group in df.groupby(key_col, sort=False)
+        }
+
     dict_av = to_dict_safe(df_av, 'BARKOD_CLN')
-    dict_flas = to_dict_safe(df_flas, 'BARKOD_CLN')
     dict_kom = to_dict_safe(df_kom, 'BARKOD_CLN')
     dict_gun = to_dict_safe(df_gun, 'BARKOD_CLN')
     dict_ind = to_dict_safe(indirimli, 'BARKOD_CLN')
     dict_plus = to_dict_safe(df_plus, 'BARKOD_CLN')
     dict_plus_ek = to_dict_safe(df_plus_ek, 'BARKOD_CLN')
     dict_muh_av = to_dict_safe(df_muh_av, 'BARKOD_CLN')
-    dict_muh_flas = to_dict_safe(df_muh_flas, 'BARKOD_CLN')
     dict_muh_plus = to_dict_safe(df_muh_plus, 'BARKOD_CLN')
+    flash_rows_by_barcode = to_rows_safe(df_flas, 'BARKOD_CLN')
+    accounting_flash_rows_by_barcode = to_rows_safe(df_muh_flas, 'BARKOD_CLN')
 
     results = []
 
     for b in barcodes:
+        fl_rows = flash_rows_by_barcode.get(b, [])
+        muh_flas_rows = accounting_flash_rows_by_barcode.get(b, [])
         av_row = dict_av.get(b)
-        fl_row = dict_flas.get(b)
+        fl_row = fl_rows[0] if fl_rows else None
         kom_row = dict_kom.get(b)
         gun_row = dict_gun.get(b)
         tr_row = dict_ind.get(b)
@@ -378,7 +519,6 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         plus_ek_row = dict_plus_ek.get(b)
 
         muh_av_row = dict_muh_av.get(b)
-        muh_flas_row = dict_muh_flas.get(b)
         muh_plus_row = dict_muh_plus.get(b)
 
         stok_val = None
@@ -394,7 +534,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     break
 
         match_av = (av_row is not None) or (muh_av_row is not None)
-        match_fl = (fl_row is not None) or (muh_flas_row is not None)
+        match_fl = bool(fl_rows or muh_flas_rows)
         match_plus = (plus_row is not None) or (muh_plus_row is not None)
         match_plus_ek = plus_ek_row is not None
 
@@ -444,21 +584,24 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         av_dip_source = 'Avantajlı Muhasebe'
                         break
 
+        campaign_flash_intervals = flash_interval_candidates(fl_rows, "kampanya")
+        accounting_flash_intervals = flash_interval_candidates(muh_flas_rows, "muhasebe")
+
         flas_dip = None
         flas_dip_source = None
-        if muh_flas_row is not None:
-            for col_name in ['Senin Belirlediğin Flaş Fiyatı', '24 Saat Fiyat']:
-                if col_name in muh_flas_row:
-                    val = to_float(muh_flas_row[col_name])
-                    if val and val > 0: 
-                        flas_dip = val
-                        flas_dip_source = 'Flaş Muhasebe'
-                        break
+        flash_floor_prices = [
+            interval["price"]
+            for interval in accounting_flash_intervals
+            if interval["source"] != "Mevcut Fiyat"
+        ]
+        if flash_floor_prices:
+            flas_dip = min(flash_floor_prices)
+            flas_dip_source = 'Flaş Muhasebe'
 
         plus_dip = None
         plus_dip_source = None
         if muh_plus_row is not None:
-            for col_name in ['Plus Fiyat Üst Limiti', 'Plus Fiyat Seçimi']:
+            for col_name in ['Plus Fiyat Seçimi', 'Plus Fiyat Üst Limiti']:
                 if col_name in muh_plus_row:
                     val = to_float(muh_plus_row[col_name])
                     if val and val > 0: 
@@ -530,73 +673,174 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         f_24_fiyat_is_fallback = False
         rate_3 = None
         net_3 = None
+        flash_evaluations = []
+        flas_has_eligible_interval = False
         if match_fl:
-            if muh_flas_row is not None:
-                for col_name in ['Senin Belirlediğin Flaş Fiyatı', '24 Saat Fiyat', '3 Saat Fiyat', 'Mevcut Fiyat']:
-                    if col_name in muh_flas_row:
-                        val = to_float(muh_flas_row[col_name])
-                        if val and val > 0: f_24_fiyat = val; break
-            if f_24_fiyat is None and fl_row is not None:
-                for col_name in ['24 Saat Fiyat', '3 Saat Fiyat']:
-                    if col_name in fl_row:
-                        val = to_float(fl_row[col_name])
-                        if val and val > 0: f_24_fiyat = val; break
+            flash_intervals = merge_flash_intervals(
+                campaign_flash_intervals,
+                accounting_flash_intervals,
+            )
+            if not flash_intervals and guncel_fiyat_calc and guncel_fiyat_calc > 0:
+                flash_intervals = [{
+                    "period": "24 Saat",
+                    "start": None,
+                    "end": None,
+                    "price": guncel_fiyat_calc,
+                    "source": "Mevcut Fiyat",
+                    "origin": "güncel",
+                    "used_current_price": True,
+                }]
 
-            if f_24_fiyat is None and guncel_fiyat_calc and guncel_fiyat_calc > 0:
-                f_24_fiyat = guncel_fiyat_calc
-                f_24_fiyat_is_fallback = True
+            for interval in flash_intervals:
+                interval_rate = get_commission_rate(interval["price"], kom_row) if kom_row else None
+                if interval_rate is None and gun_row:
+                    interval_rate = to_float(gun_row.get('Komisyon Oranı'))
+                interval_net = (
+                    round(interval["price"] - (interval["price"] * (interval_rate / 100.0)), 2)
+                    if interval_rate is not None
+                    else None
+                )
+                interval_eligible = (
+                    interval_rate is not None
+                    and (flas_threshold is not None or interval["used_current_price"])
+                    and (
+                        flas_threshold is None
+                        or interval["price"] >= flas_threshold - 0.01
+                    )
+                )
+                flash_evaluations.append({
+                    **interval,
+                    "rate": interval_rate,
+                    "net": interval_net,
+                    "eligible": interval_eligible,
+                })
 
-            if f_24_fiyat and f_24_fiyat > 0:
-                rate_3 = get_commission_rate(f_24_fiyat, kom_row) if kom_row else None
-                if rate_3 is None and gun_row:
-                    try: rate_3 = to_float(gun_row['Komisyon Oranı'])
-                    except: pass
-                if rate_3 is not None:
-                    net_3 = round(f_24_fiyat - (f_24_fiyat * (rate_3 / 100.0)), 2)
-
-                if (
-                    (flas_threshold is not None or f_24_fiyat_is_fallback)
-                    and (flas_threshold is None or f_24_fiyat >= flas_threshold - 0.01)
-                ):
-                    eligible_campaigns.append('Flaş')
-                    if net_3 is not None:
-                        smart_candidates.append(('Flaş', net_3, f_24_fiyat, rate_3, f_24_fiyat_is_fallback, muh_flas_row is not None))
+            eligible_flash_evaluations = [
+                evaluation for evaluation in flash_evaluations
+                if evaluation["eligible"] and evaluation["net"] is not None
+            ]
+            valid_flash_evaluations = [
+                evaluation for evaluation in flash_evaluations
+                if evaluation["net"] is not None
+            ]
+            scalar_pool = eligible_flash_evaluations or valid_flash_evaluations
+            if scalar_pool:
+                selected_flash = min(scalar_pool, key=lambda evaluation: evaluation["net"])
+                f_24_fiyat = selected_flash["price"]
+                f_24_fiyat_is_fallback = selected_flash["used_current_price"]
+                rate_3 = selected_flash["rate"]
+                net_3 = selected_flash["net"]
+            flas_has_eligible_interval = bool(eligible_flash_evaluations)
+            if flas_has_eligible_interval:
+                eligible_campaigns.append('Flaş')
+                smart_candidates.append((
+                    'Flaş',
+                    net_3,
+                    f_24_fiyat,
+                    rate_3,
+                    f_24_fiyat_is_fallback,
+                    any(item["origin"] == "muhasebe" for item in eligible_flash_evaluations),
+                ))
 
         # 3. Plus Kampanya
         plus_fiyat = None
         plus_fiyat_is_fallback = False
         rate_4 = None
         net_4 = None
+        plus_tariff_label = None
+        plus_audit_fields = {}
         if match_plus:
-            if muh_plus_row is not None:
-                for col_name in ['Plus Fiyat Üst Limiti', 'Güncel TSF']:
-                    if col_name in muh_plus_row:
-                        val = to_float(muh_plus_row[col_name])
-                        if val and val > 0: plus_fiyat = val; break
-            if plus_fiyat is None and plus_row is not None:
-                try: plus_fiyat = to_float(plus_row['Plus Fiyat Üst Limiti'])
-                except: pass
+            plus_upper_limit = to_float(plus_row.get('Plus Fiyat Üst Limiti')) if plus_row else None
+            if plus_upper_limit is None and muh_plus_row:
+                plus_upper_limit = to_float(muh_plus_row.get('Plus Fiyat Üst Limiti'))
+            for price_row in (muh_plus_row, plus_row):
+                if price_row is not None:
+                    value = to_float(price_row.get('Plus Fiyat Seçimi'))
+                    if value is not None and value > 0:
+                        plus_fiyat = value
+                        break
+            if plus_fiyat is None:
+                for price_row in (muh_plus_row, plus_row):
+                    if price_row is None:
+                        continue
+                    for col_name in ('Plus Fiyat Üst Limiti', 'Güncel TSF'):
+                        value = to_float(price_row.get(col_name))
+                        if value is not None and value > 0:
+                            plus_fiyat = value
+                            break
+                    if plus_fiyat is not None:
+                        break
 
             if plus_fiyat is None and guncel_fiyat_calc and guncel_fiyat_calc > 0:
                 plus_fiyat = guncel_fiyat_calc
                 plus_fiyat_is_fallback = True
 
             if plus_fiyat and plus_fiyat > 0:
-                if plus_row and 'Plus Komisyon Teklifi' in plus_row:
-                    try: rate_4 = to_float(str(plus_row['Plus Komisyon Teklifi']).replace(',', '.'))
-                    except: pass
-                if rate_4 is None and kom_row:
-                    rate_4 = get_commission_rate(plus_fiyat, kom_row)
-                if rate_4 is None and gun_row:
-                    try: rate_4 = to_float(gun_row['Komisyon Oranı'])
-                    except: pass
-                if rate_4 is not None:
-                    net_4 = round(plus_fiyat - (plus_fiyat * (rate_4 / 100.0)), 2)
-
-                if (
+                row_periods = plus_periods if plus_row is not None and plus_periods else [{
+                    'days': 7,
+                    'date_position': None,
+                    'offer_position': None,
+                    'date_column': None,
+                    'offer_column': 'Plus Komisyon Teklifi' if plus_row and 'Plus Komisyon Teklifi' in plus_row else None,
+                }]
+                period_evaluations = []
+                eligible_periods = []
+                price_passes_floor = (
                     (plus_threshold is not None or plus_fiyat_is_fallback)
                     and (plus_threshold is None or plus_fiyat >= plus_threshold - 0.01)
-                ):
+                )
+                price_within_upper_limit = (
+                    plus_upper_limit is None or plus_fiyat <= plus_upper_limit + 0.01
+                )
+
+                for period in row_periods:
+                    period_rate = (
+                        to_float(plus_row.get(period['offer_column']))
+                        if plus_row is not None and period['offer_column'] is not None
+                        else None
+                    )
+                    if period['date_column'] is None and period_rate is None and kom_row:
+                        period_rate = get_commission_rate(plus_fiyat, kom_row)
+                    if period['date_column'] is None and period_rate is None and gun_row:
+                        period_rate = to_float(gun_row.get('Komisyon Oranı'))
+                    if period_rate is not None and not 0 <= period_rate <= 100:
+                        period_rate = None
+                    period_net = (
+                        round(plus_fiyat - (plus_fiyat * (period_rate / 100.0)), 2)
+                        if period_rate is not None
+                        else None
+                    )
+                    period_evaluations.append((period, period_rate, period_net))
+                    plus_audit_fields[f"Plus Komisyon ({period['days']} Gün) (%)"] = period_rate
+                    plus_audit_fields[f"Plus Net ({period['days']} Gün) (TL)"] = period_net
+
+                    date_value = plus_row.get(period['date_column']) if plus_row is not None and period['date_column'] is not None else True
+                    date_exists = date_value is True or (
+                        date_value is not None
+                        and not pd.isna(date_value)
+                        and str(date_value).strip() != ''
+                    )
+                    if (
+                        date_exists
+                        and period_rate is not None
+                        and price_passes_floor
+                        and price_within_upper_limit
+                        and fallback_candidate_is_selectable(net_1, period_net, plus_fiyat_is_fallback)
+                    ):
+                        eligible_periods.append((period, period_rate, period_net))
+
+                if len(period_evaluations) == 1:
+                    rate_4, net_4 = period_evaluations[0][1:]
+                elif eligible_periods:
+                    rate_4 = max(period[1] for period in eligible_periods)
+                    net_4 = min(period[2] for period in eligible_periods)
+
+                plus_tariff_label = choose_plus_tariff_label(
+                    plus_row or {},
+                    row_periods,
+                    [period[0]['days'] for period in eligible_periods],
+                )
+                if plus_tariff_label is not None:
                     eligible_campaigns.append('Plus')
                     if net_4 is not None:
                         smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
@@ -783,15 +1027,14 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         if (
             match_fl
             and f_24_fiyat
-            and (flas_threshold is not None or f_24_fiyat_is_fallback)
+            and flas_has_eligible_interval
             and fallback_candidate_is_selectable(net_1, net_3, f_24_fiyat_is_fallback)
         ):
             if 'Flaş' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Flaş')
         if (
             match_plus
             and plus_fiyat
-            and (plus_threshold is not None or plus_fiyat_is_fallback)
-            and fallback_candidate_is_selectable(net_1, net_4, plus_fiyat_is_fallback)
+            and plus_tariff_label is not None
         ):
             if 'Plus' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Plus')
 
@@ -897,9 +1140,12 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             'Flaş Ürün 24 Saat Fiyatı (TL)': f_24_fiyat,
             'Flaş Ürün Komisyon (%)': rate_3,
             'Flaş Ürün Kalan Net (TL)': net_3,
+            'flash_evaluations': flash_evaluations,
             'Plus Fiyatı (TL)': plus_fiyat,
+            'Plus Tarife Seçimi': plus_tariff_label,
             'Plus Komisyon (%)': rate_4,
             'Plus Net (TL)': net_4,
+            **plus_audit_fields,
             'Plus Ek Fiyatı (TL)': plus_ek_fiyat,
             'Plus Ek Komisyon (%)': rate_5,
             'Plus Ek Net (TL)': net_5,

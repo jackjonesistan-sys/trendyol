@@ -39,6 +39,7 @@ from input_files import (
     save_single_file_expiries,
     load_user_selections,
     build_campaign_label,
+    find_plus_period_columns,
     normalize_campaign_config,
     normalize_campaign_configs,
     normalize_recommendation_rule,
@@ -116,6 +117,51 @@ def as_number(value):
     return number if math.isfinite(number) else None
 
 
+def normalize_flash_period(value):
+    normalized = re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+    if normalized in {"24 saat", "24 saat fiyat"}:
+        return "24 Saat"
+    if normalized in {"3 saat", "3 saat fiyat"}:
+        return "3 Saat"
+    return None
+
+
+def normalize_flash_interval_value(value):
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0).isoformat(sep=" ")
+
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        return datetime.fromisoformat(text).replace(microsecond=0).isoformat(sep=" ")
+    except ValueError:
+        pass
+    for date_format in (
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d.%m.%Y %H:%M:%S",
+        "%d.%m.%Y %H:%M",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y %H:%M",
+        "%d/%m/%Y",
+        "%d.%m.%Y",
+        "%d-%m-%Y",
+    ):
+        try:
+            return datetime.strptime(text, date_format).isoformat(sep=" ")
+        except ValueError:
+            continue
+    return re.sub(r"\s+", " ", text).casefold()
+
+
 def parse_campaign_configs_json(raw_value, campaign_type):
     if not raw_value:
         return []
@@ -160,6 +206,7 @@ def restore_persisted_collections(frame):
             ("eligible_campaigns", list),
             ("all_matching_campaigns", list),
             ("counter_evaluations", dict),
+            ("flash_evaluations", list),
             ("dip_details", list),
         )
         if column in frame.columns
@@ -1201,47 +1248,223 @@ def apply_campaign():
             ws_fl = wb_fl.active
             b_idx_fl = header_index(ws_fl, 'Barkod')
             fiyat_24_idx = ensure_header(ws_fl, '24 Saat Fiyat')
+            fiyat_3_idx = header_index(ws_fl, '3 Saat Fiyat')
+            fixed_price_idx = ensure_header(ws_fl, 'Senin Belirlediğin Flaş Fiyatı')
             guncel_fiyat_idx = ensure_header(ws_fl, 'Güncellenecek Fiyat')
             baslangic_idx = ensure_header(ws_fl, '24 Saat Flaş Başlangıç Tarihi')
-        
+            bitis_idx = header_index(ws_fl, '24 Saat Flaş Bitiş Tarihi')
+            baslangic_3_idx = header_index(ws_fl, '3 Saat Flaş Başlangıç Tarihi')
+            bitis_3_idx = header_index(ws_fl, '3 Saat Flaş Bitiş Tarihi')
+
             if b_idx_fl and fiyat_24_idx and guncel_fiyat_idx and baslangic_idx:
-                date_groups = {} # {date_str: [row_indices]}
+                period_columns = {
+                    "24 Saat": {
+                        "price": fiyat_24_idx,
+                        "start": baslangic_idx,
+                        "end": bitis_idx,
+                    },
+                    "3 Saat": {
+                        "price": fiyat_3_idx,
+                        "start": baslangic_3_idx,
+                        "end": bitis_3_idx,
+                    },
+                }
+
+                def source_intervals(row_number):
+                    intervals = []
+                    for period, columns in period_columns.items():
+                        if not columns["price"]:
+                            continue
+                        start = (
+                            ws_fl.cell(row_number, columns["start"]).value
+                            if columns["start"]
+                            else None
+                        )
+                        end = (
+                            ws_fl.cell(row_number, columns["end"]).value
+                            if columns["end"]
+                            else None
+                        )
+                        period_price = ws_fl.cell(row_number, columns["price"]).value
+                        if (
+                            period_price not in (None, "")
+                            or start not in (None, "")
+                            or end not in (None, "")
+                        ):
+                            intervals.append((period, start, end, columns["price"]))
+                    if not intervals:
+                        intervals.append(("24 Saat", None, None, fiyat_24_idx))
+                    return intervals
+
+                source_interval_counts = {}
+                source_interval_keys = {}
+                for r in range(2, ws_fl.max_row + 1):
+                    barcode = str(ws_fl.cell(r, b_idx_fl).value or "").strip()
+                    if barcode:
+                        intervals = source_intervals(r)
+                        source_interval_counts[barcode] = (
+                            source_interval_counts.get(barcode, 0)
+                            + len(intervals)
+                        )
+                        source_interval_keys.setdefault(barcode, []).extend(
+                            (
+                                period,
+                                normalize_flash_interval_value(start),
+                                normalize_flash_interval_value(end),
+                            )
+                            for period, start, end, _price_column in intervals
+                        )
+
+                date_groups = {}  # {(date_str, period): [(row, price, column, label)]}
+                ambiguous_legacy = set()
 
                 for r in range(2, ws_fl.max_row + 1):
                     b_val = ws_fl.cell(r, b_idx_fl).value
                     if not b_val: continue
-                
+
                     b_val_str = str(b_val).strip()
                     main_sel, extra_sel = get_selection(b_val_str)
                     should_keep = (main_sel == "Flaş")
-                
+
                     if should_keep:
-                        date_val = str(ws_fl.cell(r, baslangic_idx).value or "").strip()
-                        date_key = (
-                            date_val.split()[0].replace('/', '_').replace('-', '_')
-                            if date_val
-                            else "Genel"
+                        row_info = row_by_barcode.get(b_val_str, {})
+                        has_interval_contract = "flash_evaluations" in row_info
+                        evaluations = row_info.get("flash_evaluations", [])
+                        if not isinstance(evaluations, list):
+                            evaluations = []
+
+                        ambiguous_fixed = any(
+                            isinstance(item, dict)
+                            and item.get("eligible") is True
+                            and str(item.get("source") or "").strip().casefold()
+                            == "senin belirlediğin flaş fiyatı".casefold()
+                            and not normalize_flash_interval_value(item.get("start"))
+                            and not normalize_flash_interval_value(item.get("end"))
+                            and (
+                                normalize_flash_period(item.get("period")),
+                                "",
+                                "",
+                            ) not in source_interval_keys.get(b_val_str, [])
+                            and not (
+                                source_interval_counts.get(b_val_str) == 1
+                                and len(evaluations) == 1
+                            )
+                            for item in evaluations
                         )
-                        if date_key not in date_groups:
-                            date_groups[date_key] = []
-                        date_groups[date_key].append(r)
-            
-                for date_key, keep_rows in date_groups.items():
-                    if keep_rows:
+                        if has_interval_contract and ambiguous_fixed:
+                            ambiguous_legacy.add(b_val_str)
+                            continue
+
+                        if not has_interval_contract and source_interval_counts.get(b_val_str) != 1:
+                            ambiguous_legacy.add(b_val_str)
+                            continue
+
+                        for period, start, end, period_price_idx in source_intervals(r):
+                            evaluation = None
+                            if has_interval_contract:
+                                interval_key = (
+                                    period,
+                                    normalize_flash_interval_value(start),
+                                    normalize_flash_interval_value(end),
+                                )
+                                evaluation = next((
+                                    item
+                                    for item in evaluations
+                                    if isinstance(item, dict)
+                                    and (
+                                        normalize_flash_period(item.get("period")),
+                                        normalize_flash_interval_value(item.get("start")),
+                                        normalize_flash_interval_value(item.get("end")),
+                                    ) == interval_key
+                                ), None)
+                                if (
+                                    evaluation is None
+                                    and source_interval_counts.get(b_val_str) == 1
+                                    and len(evaluations) == 1
+                                ):
+                                    fixed_evaluation = evaluations[0]
+                                    if (
+                                        isinstance(fixed_evaluation, dict)
+                                        and normalize_flash_period(
+                                            fixed_evaluation.get("period")
+                                        ) == period
+                                        and not normalize_flash_interval_value(
+                                            fixed_evaluation.get("start")
+                                        )
+                                        and not normalize_flash_interval_value(
+                                            fixed_evaluation.get("end")
+                                        )
+                                        and str(
+                                            fixed_evaluation.get("source") or ""
+                                        ).strip().casefold()
+                                        == "senin belirlediğin flaş fiyatı".casefold()
+                                    ):
+                                        evaluation = fixed_evaluation
+                                if not evaluation or evaluation.get("eligible") is not True:
+                                    continue
+                                selected_price = as_number(evaluation.get("price"))
+                                source_name = str(evaluation.get("source") or "").strip()
+                                source_period = normalize_flash_period(source_name)
+                                if source_name.casefold() == "senin belirlediğin flaş fiyatı".casefold():
+                                    if not fixed_price_idx:
+                                        continue
+                                    target_price_idx = fixed_price_idx
+                                    selection_label = "Senin Belirlediğin Flaş Fiyatı"
+                                elif source_name.casefold() == "mevcut fiyat":
+                                    target_price_idx = period_price_idx
+                                    selection_label = period
+                                elif source_period == period:
+                                    target_price_idx = period_price_idx
+                                    selection_label = period
+                                else:
+                                    continue
+                            else:
+                                selected_price = as_number(
+                                    row_info.get('Flaş Ürün 24 Saat Fiyatı (TL)')
+                                )
+                                target_price_idx = period_price_idx
+                                selection_label = period
+
+                            if selected_price is None:
+                                continue
+                            date_val = str(start or "").strip()
+                            date_key = (
+                                date_val.split()[0].replace('/', '_').replace('-', '_')
+                                if date_val
+                                else "Genel"
+                            )
+                            date_groups.setdefault((date_key, period), []).append((
+                                r,
+                                selected_price,
+                                target_price_idx,
+                                selection_label,
+                            ))
+
+                if ambiguous_legacy:
+                    return jsonify({
+                        "success": False,
+                        "message": (
+                            "Flaş sonuçları tarih aralıklarını ayırt etmiyor; "
+                            "yüklenen girdilerle yeniden hesaplayın."
+                        ),
+                    }), 400
+
+                for (date_key, period), assignments in date_groups.items():
+                    if assignments:
                         wb_copy = clone_workbook(wb_fl)
                         ws_copy = wb_copy.active
-                        for r in keep_rows:
-                            barcode = str(ws_copy.cell(r, b_idx_fl).value or '').strip()
-                            selected_price = row_by_barcode.get(barcode, {}).get('Flaş Ürün 24 Saat Fiyatı (TL)')
-                            if selected_price is not None and not pd.isna(selected_price):
-                                ws_copy.cell(r, fiyat_24_idx).value = float(selected_price)
-                            ws_copy.cell(r, guncel_fiyat_idx).value = "24 Saat"
+                        for r, selected_price, target_price_idx, selection_label in assignments:
+                            ws_copy.cell(r, target_price_idx).value = float(selected_price)
+                            ws_copy.cell(r, guncel_fiyat_idx).value = selection_label
+                        keep_rows = [assignment[0] for assignment in assignments]
                         safe_keep_rows(ws_copy, keep_rows)
-                        out_name = os.path.join(run_output_dir, f"Flas_Urunler_{date_key}.xlsx")
+                        period_suffix = "_3_Saat" if period == "3 Saat" else ""
+                        file_name = f"Flas_Urunler_{date_key}{period_suffix}.xlsx"
+                        out_name = os.path.join(run_output_dir, file_name)
                         shrink_data_validations(ws_copy)
                         wb_copy.save(out_name)
                         fix_xlsx_for_trendyol(out_name)
-                        generated_files.append(os.path.join(timestamp_folder, f"Flas_Urunler_{date_key}.xlsx"))
+                        generated_files.append(os.path.join(timestamp_folder, file_name))
                 
         except Exception:
             return processing_error("Flaş dosya")
@@ -1252,27 +1475,16 @@ def apply_campaign():
             try:
                 wb_plus = load_merged_campaign_workbook(F_PLUS, F_MUH_PLUS, "Barkod")
                 ws_plus = wb_plus.active
-                header_plus = [ws_plus.cell(1, c).value for c in range(1, ws_plus.max_column + 1)]
                 b_idx_plus = header_index(ws_plus, 'Barkod')
                 fiyat_secim_idx = ensure_header(ws_plus, 'Plus Fiyat Seçimi')
                 tarife_secim_idx = ensure_header(ws_plus, 'Tarife Seçimi')
                 ust_limit_idx = ensure_header(ws_plus, 'Plus Fiyat Üst Limiti')
                 header_plus = [ws_plus.cell(1, c).value for c in range(1, ws_plus.max_column + 1)]
-            
-                tarih_idx_plus = None
-                gun_sayisi = 7
-                for idx_c, col in enumerate(header_plus):
-                    if col and "Tarih Aralığı" in str(col):
-                        tarih_idx_plus = idx_c + 1
-                        import re
-                        match = re.search(r'\((\d+)\s*Gün\)', str(col))
-                        if match:
-                            gun_sayisi = int(match.group(1))
-                        break
-                    
+                plus_periods = find_plus_period_columns(header_plus)
+                legacy_tariff = f"{sum(period['days'] for period in plus_periods) or 7} Günlük Fiyat"
+
                 if b_idx_plus and fiyat_secim_idx and tarife_secim_idx and ust_limit_idx:
-                    date_groups = {}  # {date_key: [row_indices]}
-                    import re
+                    date_groups = {}  # {all_period_values: [row_indices]}
 
                     for r in range(2, ws_plus.max_row + 1):
                         b_val = ws_plus.cell(r, b_idx_plus).value
@@ -1282,23 +1494,14 @@ def apply_campaign():
                         should_keep = (main_sel == "Plus")
 
                         if should_keep:
-                            date_key = "Genel"
-                            if tarih_idx_plus:
-                                date_val = str(ws_plus.cell(r, tarih_idx_plus).value or "").strip()
-                                if date_val:
-                                    tr_map = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
-                                    clean_d = date_val.translate(tr_map)
-                                    date_key = re.sub(r'[^\w\.\-]', '_', clean_d)
-                                    date_key = re.sub(r'_+', '_', date_key).strip('_')
+                            period_values = tuple(
+                                ws_plus.cell(r, period["date_position"] + 1).value
+                                for period in plus_periods
+                            )
+                            date_groups.setdefault(period_values, []).append(r)
 
-                            if not date_key:
-                                date_key = "Genel"
-
-                            if date_key not in date_groups:
-                                date_groups[date_key] = []
-                            date_groups[date_key].append(r)
-
-                    for date_key, keep_rows in date_groups.items():
+                    used_file_names = set()
+                    for period_values, keep_rows in date_groups.items():
                         if keep_rows:
                             wb_copy = clone_workbook(wb_plus)
                             ws_copy = wb_copy.active
@@ -1308,13 +1511,50 @@ def apply_campaign():
                                 row_info = row_by_barcode.get(barcode, {})
                                 selected_price = row_info.get('Plus Fiyatı (TL)')
                                 ws_copy.cell(r, fiyat_secim_idx).value = selected_price if selected_price is not None and not pd.isna(selected_price) else ust_lim
-                                ws_copy.cell(r, tarife_secim_idx).value = f"{gun_sayisi} Günlük Fiyat"
+                                selected_tariff = row_info.get('Plus Tarife Seçimi')
+                                ws_copy.cell(r, tarife_secim_idx).value = (
+                                    selected_tariff
+                                    if isinstance(selected_tariff, str) and selected_tariff.strip()
+                                    else legacy_tariff
+                                )
 
                             safe_keep_rows(ws_copy, keep_rows)
+                            for table in ws_copy.tables.values():
+                                min_col, min_row, max_col, max_row = (
+                                    openpyxl.utils.range_boundaries(table.ref)
+                                )
+                                if max_row > ws_copy.max_row:
+                                    table.ref = (
+                                        f"{openpyxl.utils.get_column_letter(min_col)}{min_row}:"
+                                        f"{openpyxl.utils.get_column_letter(max_col)}{ws_copy.max_row}"
+                                    )
+                            date_parts = []
+                            for position, value in enumerate(period_values, 1):
+                                clean_value = str(value or "").strip()
+                                if clean_value:
+                                    clean_value = clean_value.translate(
+                                        str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
+                                    )
+                                    clean_value = re.sub(r'[^\w\.\-]', '_', clean_value)
+                                    clean_value = re.sub(r'_+', '_', clean_value).strip('_')
+                                    if clean_value:
+                                        date_parts.append(
+                                            f"{position}_{clean_value}"
+                                            if len(plus_periods) > 1
+                                            else clean_value
+                                        )
+                            date_key = "__".join(date_parts) or "Genel"
                             if date_key == "Genel":
                                 file_name = "Plus_Komisyon_Tarifeleri.xlsx"
                             else:
                                 file_name = f"Plus_Komisyon_Tarifeleri_{date_key}.xlsx"
+                            if file_name in used_file_names:
+                                base_name, extension = os.path.splitext(file_name)
+                                suffix = 2
+                                while f"{base_name}_{suffix}{extension}" in used_file_names:
+                                    suffix += 1
+                                file_name = f"{base_name}_{suffix}{extension}"
+                            used_file_names.add(file_name)
 
                             out_name = os.path.join(run_output_dir, file_name)
                             shrink_data_validations(ws_copy)
@@ -1429,7 +1669,6 @@ def apply_campaign():
                             disc_type = c_item.get('discount_type') or c_item.get('discount_unit') or 'TL'
 
                             if not min_p or not disc:
-                                import re
                                 m_pct = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*%\s*(\d+(?:[\.,]\d+)?)', c_label, re.IGNORECASE)
                                 if not m_pct:
                                     m_pct = re.search(r'(\d+(?:[\.,]\d+)?)\s*TL\s*Üzeri\s*/\s*(\d+(?:[\.,]\d+)?)\s*%', c_label, re.IGNORECASE)

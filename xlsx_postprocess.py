@@ -59,39 +59,74 @@ def _compute_formula_cached_value(formula_text, row, cell_vals):
     if not formula_text:
         return None
 
-    # IF(ISBLANK(Q{r}), "", "Hayır")
-    if "ISBLANK" in formula_text and "Hay" in formula_text and "SEARCH" not in formula_text and "7 G" not in formula_text:
-        q_val = cell_vals.get((row, "Q"))
-        if q_val is None or q_val == "":
-            return ""
-        return "Hay\u0131r"
+    upper_formula = formula_text.upper()
 
-    # IF(AND(ISBLANK(Q{r}), ISBLANK(U{r})), "", "7 Günlük Fiyat")
-    if "ISBLANK" in formula_text and ("7 G" in formula_text or "nl" in formula_text):
-        q_val = cell_vals.get((row, "Q"))
-        u_val = cell_vals.get((row, "U"))
-        if (q_val is None or q_val == "") and (u_val is None or u_val == ""):
-            return ""
-        return "7 G\u00fcnl\u00fck Fiyat"
+    # IF(...SEARCH("3 Günlük", T{r})..., IF(S{r}<=M{r}, O{r}, "-")...)
+    if "SEARCH" in upper_formula:
+        search_refs = re.findall(
+            r'SEARCH\s*\(\s*"((?:""|[^"])*)"\s*,\s*\$?([A-Z]+)\$?\d+\s*\)',
+            formula_text,
+            flags=re.IGNORECASE,
+        )
+        value_refs = re.search(
+            r'IF\s*\(\s*\$?([A-Z]+)\$?\d+\s*<=\s*\$?([A-Z]+)\$?\d+\s*,'
+            r'\s*\$?([A-Z]+)\$?\d+\s*,\s*"-"\s*\)',
+            formula_text,
+            flags=re.IGNORECASE,
+        )
+        if not search_refs or value_refs is None:
+            return None
 
-    # IF(OR(Q{r}="", R{r}=""), "-", IF(ISNUMBER(SEARCH("7 Günlük", R{r})), IF(Q{r}<=M{r}, O{r}, "-"), "-"))
-    if "SEARCH" in formula_text and ("7 G" in formula_text or "nl" in formula_text):
-        q_val = cell_vals.get((row, "Q"))
-        r_val = cell_vals.get((row, "R"))
-        m_val = cell_vals.get((row, "M"))
-        o_val = cell_vals.get((row, "O"))
-
-        if q_val is None or q_val == "" or r_val is None or r_val == "":
+        price_col, upper_limit_col, offer_col = (
+            column.upper() for column in value_refs.groups()
+        )
+        price = cell_vals.get((row, price_col))
+        upper_limit = cell_vals.get((row, upper_limit_col))
+        offer = cell_vals.get((row, offer_col))
+        if price is None or price == "":
             return "-"
 
-        r_str = str(r_val)
-        if "7 G" in r_str or "nl" in r_str:
-            try:
-                if float(q_val) <= float(m_val):
-                    return o_val  # sayısal değer
-            except (ValueError, TypeError):
-                pass
-        return "-"
+        tariff_matches = False
+        for phrase, tariff_col in search_refs:
+            tariff = cell_vals.get((row, tariff_col.upper()))
+            if tariff not in (None, "") and (
+                phrase.replace('""', '"').casefold() in str(tariff).casefold()
+            ):
+                tariff_matches = True
+                break
+        if not tariff_matches or offer is None or offer == "":
+            return "-"
+
+        try:
+            return offer if float(price) <= float(upper_limit) else "-"
+        except (ValueError, TypeError):
+            return "-"
+
+    # IF(ISBLANK(S{r}), "", "Hayır")
+    cancel_ref = re.search(
+        r'IF\s*\(\s*ISBLANK\s*\(\s*\$?([A-Z]+)\$?\d+\s*\)\s*,'
+        r'\s*""\s*,\s*"HAYIR"\s*\)\s*$',
+        formula_text,
+        flags=re.IGNORECASE,
+    )
+    if cancel_ref is not None:
+        price = cell_vals.get((row, cancel_ref.group(1).upper()))
+        return "" if price is None or price == "" else "Hay\u0131r"
+
+    # IF(AND(ISBLANK(...), ...), "", "<tarife>")
+    if "ISBLANK" in upper_formula and "AND" in upper_formula:
+        blank_refs = re.findall(
+            r'ISBLANK\s*\(\s*\$?([A-Z]+)\$?\d+\s*\)',
+            formula_text,
+            flags=re.IGNORECASE,
+        )
+        result_text = re.search(r',\s*""\s*,\s*"([^"]*)"\s*\)\s*$', formula_text)
+        if blank_refs and result_text is not None:
+            all_blank = all(
+                cell_vals.get((row, column.upper())) in (None, "")
+                for column in blank_refs
+            )
+            return "" if all_blank else result_text.group(1)
 
     return None
 
