@@ -91,23 +91,82 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(report["Ekstra Uygulanabilir İndirim (%)"], 10)
 
     def test_plus_extra_uses_customer_price_after_selected_rate(self):
-        report = app.build_report_row(
-            {
-                "Barkod": "A1",
-                "userExtraSelection": "Plus Ek İndirim %10",
-                "İndirim Uygulanabilir": "Hayır",
-                "Güncel Ürün Fiyatı (TL)": 100,
-                "Güncel Ürün Kalan Net (TL)": 90,
-                "Güncel Ürün Komisyon (%)": 10,
-                "Plus Ek Fiyatı %10 (TL)": 90,
-                "Plus Ek Net %10 (TL)": 80,
-                "Plus Ek Komisyon (%)": 10,
-            }
-        )
+        row = {
+            "Barkod": "A1",
+            "userExtraSelection": "Plus Ek İndirim %10",
+            "İndirim Uygulanabilir": "Hayır",
+            "Güncel Ürün Fiyatı (TL)": 100,
+            "Güncel Ürün Kalan Net (TL)": 90,
+            "Güncel Ürün Komisyon (%)": 10,
+            "Plus Ek Fiyatı %10 (TL)": 90,
+            "Plus Ek Net %10 (TL)": 80,
+            "Plus Ek Komisyon (%)": 10,
+        }
+        report = app.build_report_row(row)
 
         self.assertEqual(report["Plus Ek İndirim Fiyat (TL)"], 90)
+        self.assertEqual(report["Plus Ek İndirim Net"], 80)
         self.assertEqual(report["Uygulanan Kampanya Fiyat"], 90)
+        self.assertEqual(app.selected_campaign_values(row), (90, 80, 10))
         self.assertEqual(app.discounted_price(100, 10), 90)
+
+    def test_advanced_plus_extra_uses_persisted_evaluation_for_report_values(self):
+        label = (
+            "Plus Ek İndirim (300 TL Üzeri / 50 TL İndirim / "
+            "%60 Trendyol Karşılamalı)"
+        )
+        row = {
+            "Barkod": "A1",
+            "userExtraSelection": label,
+            "Güncel Ürün Fiyatı (TL)": 400,
+            "Güncel Ürün Kalan Net (TL)": 360,
+            "Güncel Ürün Komisyon (%)": 10,
+            "counter_evaluations": {
+                label: {
+                    "price": 400,
+                    "customer_price": 350,
+                    "rate": 10,
+                    "net": 330,
+                    "seller_disc": 20,
+                    "disc_type": "TL",
+                    "disc_val": 50,
+                    "trendyol_percent": 60,
+                }
+            },
+        }
+
+        self.assertEqual(app.selected_campaign_values(row), (350, 330, 10))
+        report = app.build_report_row(row)
+        self.assertEqual(report["Plus Ek İndirim Fiyat (TL)"], 350)
+        self.assertEqual(report["Plus Ek İndirim Net"], 330)
+        self.assertEqual(report["Uygulanan Kampanya Fiyat"], 350)
+        self.assertEqual(report["Uygulanan Kampanya Net"], 330)
+
+    def test_main_plus_extra_recomposition_keeps_trendyol_funded_discount_in_net(self):
+        label = "Plus Ek İndirim Gelişmiş"
+        row = {
+            "userSelection": "Plus",
+            "userExtraSelection": label,
+            "Plus Fiyatı (TL)": 400,
+            "Plus Net (TL)": 360,
+            "Plus Komisyon (%)": 10,
+            "Güncel Ürün Fiyatı (TL)": 500,
+            "Güncel Ürün Komisyon (%)": 10,
+            "counter_evaluations": {
+                label: {
+                    "price": 500,
+                    "customer_price": 450,
+                    "rate": 10,
+                    "net": 430,
+                    "seller_disc": 20,
+                    "disc_type": "%",
+                    "disc_val": 10,
+                    "trendyol_percent": 60,
+                }
+            },
+        }
+
+        self.assertEqual(app.selected_campaign_values(row), (360, 344, 10))
 
     def test_visible_columns_keep_contract_order(self):
         requested = ["Hangisi Karlı?", "Barkod", "Güncel Net"]

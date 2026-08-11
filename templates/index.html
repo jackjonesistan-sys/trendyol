@@ -421,8 +421,8 @@
                                     <h3 class="text-xs md:text-sm font-bold text-base-content">Karşılamalı Kampanya
                                         Dosyaları (Çoklu Yükleme)</h3>
                                     <p class="text-[11px] text-base-content/60">Birden fazla Karşılamalı Kampanya
-                                        dosyası yükleyebilirsiniz. Yükleme sonrası parametreleri ve bitiş tarihini
-                                        belirleyebilirsiniz.</p>
+                                        dosyası yükleyebilirsiniz. Minimum fiyatı, indirimi TL veya % olarak,
+                                        Trendyol karşılama oranını ve bitiş tarihini belirleyebilirsiniz.</p>
                                 </div>
                             </div>
                             <label
@@ -442,7 +442,7 @@
                     </div>
                 </div>
 
-                <!-- Trendyol Plus Müşterilerine Özel Ek % İndirim Dosyaları (Çoklu Yükleme) -->
+                <!-- Trendyol Plus Müşterilerine Özel Ek İndirim Dosyaları (Çoklu Yükleme) -->
                 <div class="pt-4 border-t border-base-200">
                     <div class="bg-base-200/60 p-4 rounded-2xl border border-base-300/60 space-y-3">
                         <div class="flex items-center justify-between flex-wrap gap-2">
@@ -456,10 +456,10 @@
                                 </div>
                                 <div>
                                     <h3 class="text-xs md:text-sm font-bold text-base-content">Trendyol Plus
-                                        Müşterilerine Özel Ek % İndirim (Çoklu Yükleme)</h3>
+                                        Müşterilerine Özel Ek İndirim (TL / % · Çoklu Yükleme)</h3>
                                     <p class="text-[11px] text-base-content/60">Birden fazla Plus Ek İndirim dosyası
-                                        yükleyebilirsiniz. Yükleme sonrası ek indirim oranını (%) ve bitiş tarihini
-                                        belirleyebilirsiniz.</p>
+                                        yükleyebilirsiniz. Minimum fiyatı, indirimi TL veya % olarak, Trendyol
+                                        karşılama oranını ve bitiş tarihini belirleyebilirsiniz.</p>
                                 </div>
                             </div>
                             <label
@@ -489,7 +489,7 @@
                                     </div>
                                     <div>
                                         <h3 class="text-xs md:text-sm font-bold text-base-content">Trendyol Plus Müşterilerine Özel Ek Kupon (Çoklu Yükleme)</h3>
-                                        <p class="text-[11px] text-base-content/60">Birden fazla Plus Kupon dosyası yükleyebilirsiniz. Yükleme sonrası tutar, kupon ve karşılama oranını belirleyebilirsiniz.</p>
+                                        <p class="text-[11px] text-base-content/60">Birden fazla Plus Kupon dosyası yükleyebilirsiniz. Minimum fiyatı, kuponu TL veya % olarak, Trendyol karşılama oranını ve bitiş tarihini belirleyebilirsiniz.</p>
                                     </div>
                                 </div>
                                 <label
@@ -856,27 +856,36 @@
 
             const counter = row.counter_evaluations?.[extraSel];
             if (counter) {
-                const cPrice = asNumber(counter.price) ?? basePrice;
+                const evaluationBasePrice = asNumber(counter.price) ?? basePrice;
                 const discType = counter.disc_type || '%';
                 const discVal = asNumber(counter.disc_val) ?? 0;
                 const trendyolPercent = asNumber(counter.trendyol_percent) ?? 0;
+                const evaluationRate = asNumber(counter.rate) ?? baseComm ?? 0;
 
-                if (mainSel !== 'Hiçbiri' && basePrice !== null && basePrice < cPrice) {
+                if (mainSel !== 'Hiçbiri' && basePrice !== null && evaluationBasePrice !== null && basePrice < evaluationBasePrice) {
                     const totDisc = discType === '%' ? round2(basePrice * (discVal / 100)) : discVal;
                     const sellerDisc = round2(totDisc * (1 - (trendyolPercent / 100)));
                     const finalPrice = round2(basePrice - totDisc);
-                    const finalComm = baseComm ?? 0;
-                    const commRate = finalComm ?? 0;
-                    const finalNet = round2(finalPrice - (finalPrice * (commRate / 100)) - sellerDisc);
-                    return [finalPrice, finalNet, finalComm];
-                } else {
-                    const sellerDisc = asNumber(counter.seller_disc) ?? 0;
-                    const finalPrice = cPrice;
-                    const finalComm = asNumber(counter.rate) ?? baseComm;
-                    const commRate = finalComm ?? 0;
-                    const finalNet = round2(finalPrice - (finalPrice * (commRate / 100)) - sellerDisc);
-                    return [finalPrice, finalNet, finalComm];
+                    const commRate = baseComm ?? evaluationRate;
+                    const finalNet = round2(basePrice - (basePrice * (commRate / 100)) - sellerDisc);
+                    return [finalPrice, finalNet, commRate];
                 }
+
+                const customerPrice = asNumber(counter.customer_price);
+                const evaluationNet = asNumber(counter.net);
+                if (customerPrice !== null && evaluationNet !== null) {
+                    return [customerPrice, evaluationNet, evaluationRate];
+                }
+                if (evaluationBasePrice === null) return [basePrice, baseNet, baseComm];
+
+                const totalDiscount = discType === '%'
+                    ? round2(evaluationBasePrice * (discVal / 100))
+                    : discVal;
+                const sellerDisc = asNumber(counter.seller_disc)
+                    ?? round2(totalDiscount * (1 - (trendyolPercent / 100)));
+                const finalPrice = round2(evaluationBasePrice - totalDiscount);
+                const finalNet = round2(evaluationBasePrice - (evaluationBasePrice * (evaluationRate / 100)) - sellerDisc);
+                return [finalPrice, finalNet, evaluationRate];
             }
 
             if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim %')) {
@@ -912,10 +921,16 @@
             
             let plusExtraPrice = null;
             let plusExtraNet = null;
-            if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim %')) {
-                const rate = Number(extraSel.split('%').pop());
-                plusExtraPrice = asNumber(row[`Plus Ek Fiyatı %${rate} (TL)`]);
-                plusExtraNet = asNumber(row[`Plus Ek Net %${rate} (TL)`]);
+            if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim')) {
+                const evaluation = row.counter_evaluations?.[extraSel];
+                if (evaluation) {
+                    plusExtraPrice = campaignPrice;
+                    plusExtraNet = campaignNet;
+                } else if (extraSel.startsWith('Plus Ek İndirim %')) {
+                    const rate = Number(extraSel.split('%').pop());
+                    plusExtraPrice = asNumber(row[`Plus Ek Fiyatı %${rate} (TL)`]);
+                    plusExtraNet = asNumber(row[`Plus Ek Net %${rate} (TL)`]);
+                }
             }
 
             return {
@@ -1011,12 +1026,12 @@
                 input => input.files.length === 0 && input.getAttribute('data-uploaded') !== 'true'
             );
             if (missing) {
-                showToast('Zorunlu iki Excel girdisini (Ürün Komisyon Tarifeleri ve Ürün Listesi) seçin.', 'warning');
+                showToast('Zorunlu üç Excel girdisini (İndirim Uygulanabilecek Ürünler, Ürün Komisyon Tarifeleri ve Ürün Listesi) seçin.', 'warning');
                 missing.focus();
                 return;
             }
             const formData = new FormData();
-            document.querySelectorAll('input[id^="input_"][type="file"]:not(#input_counter_multi):not(#input_plus_extra_multi)').forEach(input => {
+            document.querySelectorAll('input[id^="input_"][type="file"]:not(#input_counter_multi):not(#input_plus_extra_multi):not(#input_coupon_multi)').forEach(input => {
                 if (input.files.length) formData.append(input.id.slice(6), input.files[0]);
             });
 
@@ -1028,6 +1043,7 @@
                 counterConfigs.push({
                     id: item.id,
                     filename: item.filename,
+                    label: dynamicCampaignLabel('counter', item, idx),
                     min_price: item.min_price,
                     discount_amount: item.discount_amount,
                     discount_type: item.discount_type || 'TL',
@@ -1046,7 +1062,11 @@
                 plusExtraConfigs.push({
                     id: item.id,
                     filename: item.filename,
-                    rate: item.rate,
+                    label: dynamicCampaignLabel('plus_extra', item, idx),
+                    min_price: item.min_price,
+                    discount_amount: item.discount_amount,
+                    discount_type: item.discount_type || '%',
+                    trendyol_percent: item.trendyol_percent,
                     expiry_date: item.expiry_date || '',
                     enabled: item.enabled !== false
                 });
@@ -1061,8 +1081,10 @@
                 couponConfigs.push({
                     id: item.id,
                     filename: item.filename,
+                    label: dynamicCampaignLabel('coupon', item, idx),
                     min_price: item.min_price,
                     discount_amount: item.discount_amount,
+                    discount_type: item.discount_type || 'TL',
                     trendyol_percent: item.trendyol_percent,
                     expiry_date: item.expiry_date || '',
                     enabled: item.enabled !== false
@@ -1092,23 +1114,46 @@
                             counterFilesState = data.counter_configs.map(item => ({
                                 id: item.id,
                                 filename: item.filename || item.original_name,
+                                label: item.label || '',
                                 min_price: parseFloat(item.min_price) || 0,
                                 discount_amount: parseFloat(item.discount_amount) || 0,
                                 discount_type: item.discount_type || item.discount_unit || 'TL',
                                 trendyol_percent: parseFloat(item.trendyol_percent) || 0,
                                 expiry_date: item.expiry_date || '',
+                                enabled: item.enabled !== false,
+                                path: item.path || item.stored_path || '',
                                 fileObj: null
                             }));
                             renderCounterCards();
+                        }
+                        if (Array.isArray(data.plus_extra_configs)) {
+                            plusExtraFilesState = data.plus_extra_configs.map(item => ({
+                                id: item.id,
+                                filename: item.filename || item.original_name,
+                                label: item.label || '',
+                                min_price: parseFloat(item.min_price) || 0,
+                                discount_amount: parseFloat(item.discount_amount ?? item.rate) || 0,
+                                discount_type: item.discount_type || item.discount_unit || '%',
+                                trendyol_percent: parseFloat(item.trendyol_percent) || 0,
+                                expiry_date: item.expiry_date || '',
+                                enabled: item.enabled !== false,
+                                path: item.path || item.stored_path || '',
+                                fileObj: null
+                            }));
+                            renderPlusExtraCards();
                         }
                         if (Array.isArray(data.coupon_configs)) {
                             couponFilesState = data.coupon_configs.map(item => ({
                                 id: item.id,
                                 filename: item.filename || item.original_name,
+                                label: item.label || '',
                                 min_price: parseFloat(item.min_price) || 0,
                                 discount_amount: parseFloat(item.discount_amount) || 0,
+                                discount_type: item.discount_type || item.discount_unit || 'TL',
                                 trendyol_percent: parseFloat(item.trendyol_percent) || 0,
                                 expiry_date: item.expiry_date || '',
+                                enabled: item.enabled !== false,
+                                path: item.path || item.stored_path || '',
                                 fileObj: null
                             }));
                             renderCouponCards();
@@ -1288,34 +1333,76 @@
         let counterFilesState = Array.isArray(initialCounterConfigs) ? initialCounterConfigs.map(item => ({
             id: item.id || ('counter_' + Math.random().toString(36).substr(2, 9)),
             filename: item.filename || item.original_name || 'Karşılamalı Kampanya.xlsx',
+            label: item.label || '',
             min_price: parseFloat(item.min_price) || 0,
             discount_amount: parseFloat(item.discount_amount) || 0,
             discount_type: item.discount_type || item.discount_unit || 'TL',
             trendyol_percent: parseFloat(item.trendyol_percent) || 0,
             expiry_date: item.expiry_date || '',
             enabled: item.enabled !== false,
+            path: item.path || item.stored_path || '',
             fileObj: null
         })) : [];
 
         let plusExtraFilesState = Array.isArray(initialPlusExtraConfigs) ? initialPlusExtraConfigs.map(item => ({
             id: item.id || ('plus_extra_' + Math.random().toString(36).substr(2, 9)),
             filename: item.filename || item.original_name || 'Plus Ek İndirim.xlsx',
-            rate: parseFloat(item.rate) || 0,
+            label: item.label || '',
+            min_price: parseFloat(item.min_price) || 0,
+            discount_amount: parseFloat(item.discount_amount ?? item.rate) || 0,
+            discount_type: item.discount_type || item.discount_unit || '%',
+            trendyol_percent: parseFloat(item.trendyol_percent) || 0,
             expiry_date: item.expiry_date || '',
             enabled: item.enabled !== false,
+            path: item.path || item.stored_path || '',
             fileObj: null
         })) : [];
 
         let couponFilesState = Array.isArray(initialCouponConfigs) ? initialCouponConfigs.map(item => ({
             id: item.id || ('coupon_' + Math.random().toString(36).substr(2, 9)),
             filename: item.filename || item.original_name || 'Plus Ek Kupon.xlsx',
+            label: item.label || '',
             min_price: parseFloat(item.min_price) || 0,
             discount_amount: parseFloat(item.discount_amount) || 0,
+            discount_type: item.discount_type || item.discount_unit || 'TL',
             trendyol_percent: parseFloat(item.trendyol_percent) || 0,
             expiry_date: item.expiry_date || '',
             enabled: item.enabled !== false,
+            path: item.path || item.stored_path || '',
             fileObj: null
         })) : [];
+
+        function configNumber(value) {
+            const number = parseFloat(value) || 0;
+            return Number.isInteger(number) ? parseInt(number, 10) : number;
+        }
+
+        function dynamicCampaignLabel(type, item, index) {
+            const minPrice = configNumber(item.min_price);
+            const discount = configNumber(item.discount_amount ?? item.rate);
+            const discountType = item.discount_type === 'TL' ? 'TL' : '%';
+            const trendyolPercent = configNumber(item.trendyol_percent);
+            const discountPart = discountType === '%' ? `%${discount} İndirim` : `${discount} TL İndirim`;
+            const trendyolPart = trendyolPercent > 0 ? ` / %${trendyolPercent} Trendyol Karşılamalı` : '';
+
+            if (type === 'plus_extra') {
+                if (minPrice <= 0 && discountType === '%' && trendyolPercent <= 0 && discount > 0) {
+                    return `Plus Ek İndirim %${discount}`;
+                }
+                return (minPrice > 0 || discount > 0)
+                    ? `Plus Ek İndirim (${minPrice} TL Üzeri / ${discountPart}${trendyolPart})`
+                    : (item.label || `Plus Ek İndirim #${index + 1}`);
+            }
+            if (type === 'coupon') {
+                const couponPart = discountType === '%' ? `%${discount} Kupon` : `${discount} TL Kupon`;
+                return (minPrice > 0 || discount > 0)
+                    ? `${minPrice} TL Üzerine ${couponPart}${trendyolPart} - Trendyol Plus Müşterilerine Özel`
+                    : (item.label || `Kupon #${index + 1}`);
+            }
+            return (minPrice > 0 || discount > 0)
+                ? `Karşılamalı (${minPrice} TL Üzeri / ${discountPart}${trendyolPart})`
+                : (item.label || `Karşılamalı #${index + 1}`);
+        }
 
         $(document).ready(function () {
             renderCounterCards();
@@ -1326,24 +1413,39 @@
         });
 
         function parseCounterFilename(filename) {
-            const pattern = /(\d+)\s*[-_]?tl[-_]?uzeri\s*[-_]?(\d+)\s*[-_]?tl[-_]?indirim\s*[-_]?(\d+)\s*[-_]?trendyol/i;
-            const match = filename.match(pattern);
-            if (match) {
-                return {
-                    min_price: parseFloat(match[1]) || 0,
-                    discount_amount: parseFloat(match[2]) || 0,
-                    trendyol_percent: parseFloat(match[3]) || 0
-                };
-            }
-            return { min_price: 0, discount_amount: 0, trendyol_percent: 0 };
+            const text = String(filename);
+            const minMatch = text.match(/(\d+(?:[\.,]\d+)?)\s*[-_ ]*tl\s*[-_ ]*(?:uzeri|üzeri|uzerine|üzerine)/i);
+            const percentMatch = text.match(/%\s*(\d+(?:[\.,]\d+)?)\s*[-_ ]*[iİ]ndirim/i)
+                || text.match(/(\d+(?:[\.,]\d+)?)\s*%\s*[-_ ]*[iİ]ndirim/i);
+            const tlMatch = text.match(/(\d+(?:[\.,]\d+)?)\s*[-_ ]*tl\s*[-_ ]*[iİ]ndirim/i);
+            const trendyolMatch = text.match(/%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_ ]*trendyol/i);
+            const discountMatch = percentMatch || tlMatch;
+            return {
+                min_price: minMatch ? parseFloat(minMatch[1].replace(',', '.')) || 0 : 0,
+                discount_amount: discountMatch ? parseFloat(discountMatch[1].replace(',', '.')) || 0 : 0,
+                discount_type: percentMatch ? '%' : 'TL',
+                trendyol_percent: trendyolMatch ? parseFloat(trendyolMatch[1].replace(',', '.')) || 0 : 0
+            };
         }
 
         function parsePlusExtraFilename(filename) {
-            const match = filename.match(/%?\s*(\d+)\s*%?/i);
-            if (match) {
-                return parseFloat(match[1]) || 0;
-            }
-            return 0;
+            const text = String(filename);
+            const minMatch = text.match(/(\d+(?:[\.,]\d+)?)\s*[-_ ]*tl\s*[-_ ]*(?:uzeri|üzeri|uzerine|üzerine)/i);
+            const percentMatch = text.match(/%\s*(\d+(?:[\.,]\d+)?)\s*[-_ ]*(?:ek\s*)?[iİ]ndirim/i)
+                || text.match(/(\d+(?:[\.,]\d+)?)\s*%\s*[-_ ]*(?:ek\s*)?[iİ]ndirim/i)
+                || text.match(/(?:ek[\s_-]*)?yüzde[\s_-]*(\d+(?:[\.,]\d+)?)[\s_-]*[iİ]ndirim/i);
+            const tlMatch = text.match(/(\d+(?:[\.,]\d+)?)\s*[-_ ]*tl\s*[-_ ]*(?:ek\s*)?[iİ]ndirim/i);
+            const trendyolMatch = text.match(/%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_ ]*trendyol/i);
+            const fallbackRate = !percentMatch && !tlMatch
+                ? text.match(/(?:ek[\s_-]+)(\d+(?:[\.,]\d+)?)[\s_-]*[iİ]ndirim/i)
+                : null;
+            const discountMatch = percentMatch || tlMatch || fallbackRate;
+            return {
+                min_price: minMatch ? parseFloat(minMatch[1].replace(',', '.')) || 0 : 0,
+                discount_amount: discountMatch ? parseFloat(discountMatch[1].replace(',', '.')) || 0 : 0,
+                discount_type: tlMatch ? 'TL' : '%',
+                trendyol_percent: trendyolMatch ? parseFloat(trendyolMatch[1].replace(',', '.')) || 0 : 0
+            };
         }
 
         const singleExpiriesState = {};
@@ -1545,13 +1647,13 @@
                             <label class="form-control">
                                 <div class="flex items-center justify-between gap-1 mb-0.5">
                                     <span class="label-text text-[11px] font-semibold text-base-content/80">İndirim Tutarı / Oranı</span>
-                                    <select class="select select-ghost select-xs text-[10px] font-bold px-1 h-5 min-h-5" onchange="updateCounterParam('${item.id}', 'discount_type', this.value)">
+                                    <select aria-label="Karşılamalı kampanya indirim türü" class="select select-ghost select-xs text-[10px] font-bold px-1 h-5 min-h-5" onchange="updateCounterParam('${item.id}', 'discount_type', this.value)">
                                         <option value="TL" ${!isPct ? 'selected' : ''}>TL</option>
                                         <option value="%" ${isPct ? 'selected' : ''}>%</option>
                                     </select>
                                 </div>
                                 <div class="join w-full">
-                                    <input type="number" min="0" step="0.01" value="${item.discount_amount}" class="input input-bordered input-xs focus:input-primary rounded-l-lg join-item w-full" onchange="updateCounterParam('${item.id}', 'discount_amount', this.value)">
+                                    <input type="number" min="0" ${isPct ? 'max="100"' : ''} step="0.01" value="${item.discount_amount}" aria-label="Karşılamalı kampanya indirim değeri" class="input input-bordered input-xs focus:input-primary rounded-l-lg join-item w-full" onchange="updateCounterParam('${item.id}', 'discount_amount', this.value)">
                                     <span class="btn btn-xs join-item no-animation pointer-events-none text-[10px] px-2 font-bold">${isPct ? '%' : 'TL'}</span>
                                 </div>
                             </label>
@@ -1598,12 +1700,16 @@
             if (!files || !files.length) return;
             Array.from(files).forEach((file, idx) => {
                 if (!file.name.toLowerCase().endsWith('.xlsx')) return;
-                const rate = parsePlusExtraFilename(file.name);
+                const parsed = parsePlusExtraFilename(file.name);
                 const item = {
                     id: 'plus_extra_' + Date.now() + '_' + idx,
                     filename: file.name,
-                    rate: rate,
+                    min_price: parsed.min_price,
+                    discount_amount: parsed.discount_amount,
+                    discount_type: parsed.discount_type,
+                    trendyol_percent: parsed.trendyol_percent,
                     expiry_date: '',
+                    enabled: true,
                     fileObj: file
                 };
                 plusExtraFilesState.push(item);
@@ -1622,6 +1728,7 @@
             plusExtraFilesState.forEach((item) => {
                 const badgeHtml = getTimeRemainingBadge(item.expiry_date);
                 const isEnabled = item.enabled !== false;
+                const isPct = item.discount_type !== 'TL';
                 const cardHtml = `
                     <div class="bg-base-100 rounded-xl p-3.5 border border-base-300 shadow-2xs space-y-3 ${!isEnabled ? 'opacity-55 grayscale-[30%] bg-base-200/40' : ''}">
                         <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-base-200">
@@ -1640,15 +1747,30 @@
                                 <button type="button" class="btn btn-ghost btn-xs text-error font-medium" onclick="removePlusExtraFile('${item.id}')">Kaldır</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="form-control">
-                                <span class="label-text text-[11px] font-semibold text-base-content/80">Plus Müşteri Ek İndirim Oranı (%)</span>
-                                <input type="number" min="0" max="100" step="0.01" value="${item.rate}" class="input input-bordered input-xs focus:input-secondary rounded-lg" onchange="updatePlusExtraParam('${item.id}', 'rate', this.value)">
-                            </label>
-                            <label class="form-control">
-                                <span class="label-text text-[11px] font-semibold text-base-content/80">Bitiş Tarihi & Saati</span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend text-[11px] text-base-content/80">Kaç TL Üzerine</legend>
+                                <input type="number" min="0" step="0.01" value="${item.min_price}" aria-label="Plus Ek minimum fiyat" class="input input-bordered input-xs focus:input-secondary rounded-lg w-full" onchange="updatePlusExtraParam('${item.id}', 'min_price', this.value)">
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend text-[11px] text-base-content/80">Ek İndirim Tutarı / Oranı</legend>
+                                <div class="join w-full">
+                                    <select aria-label="Plus Ek indirim türü" class="select select-ghost select-xs join-item text-[10px] font-bold px-1" onchange="updatePlusExtraParam('${item.id}', 'discount_type', this.value)">
+                                        <option value="TL" ${!isPct ? 'selected' : ''}>TL</option>
+                                        <option value="%" ${isPct ? 'selected' : ''}>%</option>
+                                    </select>
+                                    <input type="number" min="0" ${isPct ? 'max="100"' : ''} step="0.01" value="${item.discount_amount}" aria-label="Plus Ek indirim değeri" class="input input-bordered input-xs focus:input-secondary join-item w-full" onchange="updatePlusExtraParam('${item.id}', 'discount_amount', this.value)">
+                                    <span class="btn btn-xs join-item no-animation pointer-events-none text-[10px] px-2 font-bold">${isPct ? '%' : 'TL'}</span>
+                                </div>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend text-[11px] text-base-content/80">Trendyol Karşılama (%)</legend>
+                                <input type="number" min="0" max="100" step="0.01" value="${item.trendyol_percent}" aria-label="Plus Ek Trendyol karşılama oranı" class="input input-bordered input-xs focus:input-secondary rounded-lg w-full" onchange="updatePlusExtraParam('${item.id}', 'trendyol_percent', this.value)">
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend text-[11px] text-base-content/80">Bitiş Tarihi & Saati</legend>
                                 <input type="datetime-local" value="${item.expiry_date || ''}" class="input input-bordered input-xs focus:input-secondary text-[11px] rounded-lg" onchange="updatePlusExtraParam('${item.id}', 'expiry_date', this.value)">
-                            </label>
+                            </fieldset>
                         </div>
                     </div>
                 `;
@@ -1659,7 +1781,12 @@
         function updatePlusExtraParam(id, key, val) {
             const item = plusExtraFilesState.find(c => c.id === id);
             if (item) {
-                item[key] = (key === 'expiry_date') ? val : (parseFloat(val) || 0);
+                if (key === 'expiry_date' || key === 'discount_type') {
+                    item[key] = val;
+                } else {
+                    item[key] = parseFloat(val) || 0;
+                }
+                if (key === 'discount_type') renderPlusExtraCards();
                 if (key === 'expiry_date') {
                     const el = document.getElementById('badge_plus_extra_' + id);
                     if (el) el.innerHTML = getTimeRemainingBadge(val);
@@ -1683,8 +1810,10 @@
                     filename: file.name,
                     min_price: parsed.min_price,
                     discount_amount: parsed.discount_amount,
+                    discount_type: parsed.discount_type || 'TL',
                     trendyol_percent: parsed.trendyol_percent,
                     expiry_date: '',
+                    enabled: true,
                     fileObj: file
                 };
                 couponFilesState.push(item);
@@ -1714,6 +1843,7 @@
                 } else {
                     item[key] = val;
                 }
+                if (key === 'discount_type') renderCouponCards();
                 updateBulkCampaignOptions();
                 if (key === 'expiry_date') {
                     const el = document.getElementById('badge_coupon_' + id);
@@ -1737,6 +1867,7 @@
             couponFilesState.forEach((item) => {
                 const badgeHtml = getTimeRemainingBadge(item.expiry_date);
                 const isEnabled = item.enabled !== false;
+                const isPct = item.discount_type === '%';
                 const cardHtml = `
                     <div class="bg-base-100 rounded-xl p-3.5 border border-base-300 shadow-2xs space-y-3 ${!isEnabled ? 'opacity-55 grayscale-[30%] bg-base-200/40' : ''}">
                         <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-base-200">
@@ -1760,12 +1891,19 @@
                                 <span class="label-text text-[11px] font-semibold text-base-content/80">Kaç TL Üzerine</span>
                                 <input type="number" min="0" step="0.01" value="${item.min_price}" class="input input-bordered input-xs focus:input-primary rounded-lg" onchange="updateCouponParam('${item.id}', 'min_price', this.value)">
                             </label>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend text-[11px] text-base-content/80">Kupon Tutarı / Oranı</legend>
+                                <div class="join w-full">
+                                    <select aria-label="Kupon indirim türü" class="select select-ghost select-xs join-item text-[10px] font-bold px-1" onchange="updateCouponParam('${item.id}', 'discount_type', this.value)">
+                                        <option value="TL" ${!isPct ? 'selected' : ''}>TL</option>
+                                        <option value="%" ${isPct ? 'selected' : ''}>%</option>
+                                    </select>
+                                    <input type="number" min="0" ${isPct ? 'max="100"' : ''} step="0.01" value="${item.discount_amount}" aria-label="Kupon indirim değeri" class="input input-bordered input-xs focus:input-primary join-item w-full" onchange="updateCouponParam('${item.id}', 'discount_amount', this.value)">
+                                    <span class="btn btn-xs join-item no-animation pointer-events-none text-[10px] px-2 font-bold">${isPct ? '%' : 'TL'}</span>
+                                </div>
+                            </fieldset>
                             <label class="form-control">
-                                <span class="label-text text-[11px] font-semibold text-base-content/80">Kaç TL Kupon</span>
-                                <input type="number" min="0" step="0.01" value="${item.discount_amount}" class="input input-bordered input-xs focus:input-primary rounded-lg" onchange="updateCouponParam('${item.id}', 'discount_amount', this.value)">
-                            </label>
-                            <label class="form-control">
-                                <span class="label-text text-[11px] font-semibold text-base-content/80">Trendyol Katkı Oranı (%)</span>
+                                <span class="label-text text-[11px] font-semibold text-base-content/80">Trendyol Karşılama (%)</span>
                                 <input type="number" min="0" max="100" step="0.01" value="${item.trendyol_percent}" class="input input-bordered input-xs focus:input-primary rounded-lg" onchange="updateCouponParam('${item.id}', 'trendyol_percent', this.value)">
                             </label>
                             <label class="form-control">
@@ -1784,11 +1922,14 @@
             let minP = 0, disc = 0, trP = 0;
             const mMin = fnStr.match(/(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?uzeri/i);
             if (mMin) minP = parseFloat(mMin[1].replace(',', '.')) || 0;
-            const mDisc = fnStr.match(/(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?kupon/i);
+            const mPercent = fnStr.match(/%\s*(\d+(?:[\.,]\d+)?)\s*[-_]?kupon/i)
+                || fnStr.match(/(\d+(?:[\.,]\d+)?)\s*%\s*[-_]?kupon/i);
+            const mTl = fnStr.match(/(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?kupon/i);
+            const mDisc = mPercent || mTl;
             if (mDisc) disc = parseFloat(mDisc[1].replace(',', '.')) || 0;
             const mTr = fnStr.match(/%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_]?trendyol/i);
             if (mTr) trP = parseFloat(mTr[1].replace(',', '.')) || 0;
-            return { min_price: minP, discount_amount: disc, trendyol_percent: trP };
+            return { min_price: minP, discount_amount: disc, discount_type: mPercent ? '%' : 'TL', trendyol_percent: trP };
         }
 
         function updateBulkCampaignOptions() {
@@ -1801,50 +1942,31 @@
 
             if (Array.isArray(counterFilesState)) {
                 counterFilesState.forEach((item, idx) => {
-                    const minP = item.min_price;
-                    const disc = item.discount_amount;
-                    const isPct = item.discount_type === '%';
-                    const minPStr = (minP && Number.isInteger(minP)) ? intVal(minP) : minP;
-                    const discStr = (disc && Number.isInteger(disc)) ? intVal(disc) : disc;
-                    const discPart = isPct ? `%${discStr} İndirim` : `${discStr} TL İndirim`;
-                    const label = (minP > 0 || disc > 0) ? `Karşılamalı (${minPStr} TL Üzeri / ${discPart})` : (item.label || `Karşılamalı #${idx + 1}`);
-                    dynamicCampaigns.add(label);
+                    dynamicCampaigns.add(dynamicCampaignLabel('counter', item, idx));
                 });
             }
 
             if (Array.isArray(plusExtraFilesState)) {
                 plusExtraFilesState.forEach((item, idx) => {
-                    const rate = item.rate;
-                    const rateStr = (rate && Number.isInteger(rate)) ? intVal(rate) : rate;
-                    const label = rate > 0 ? `Plus Ek İndirim %${rateStr}` : (item.label || `Plus Ek İndirim #${idx + 1}`);
-                    dynamicCampaigns.add(label);
+                    dynamicCampaigns.add(dynamicCampaignLabel('plus_extra', item, idx));
                 });
             }
 
             if (Array.isArray(couponFilesState)) {
                 couponFilesState.forEach((item, idx) => {
-                    const minP = item.min_price;
-                    const disc = item.discount_amount;
-                    const minPStr = (minP && Number.isInteger(minP)) ? intVal(minP) : minP;
-                    const discStr = (disc && Number.isInteger(disc)) ? intVal(disc) : disc;
-                    const label = (minP > 0 || disc > 0) ? `${minPStr} TL Üzerine ${discStr} TL Kupon - Trendyol Plus Müşterilerine Özel` : (item.label || `Kupon #${idx + 1}`);
-                    dynamicCampaigns.add(label);
+                    dynamicCampaigns.add(dynamicCampaignLabel('coupon', item, idx));
                 });
             }
 
-            function intVal(val) {
-                return parseInt(val, 10);
-            }
-
             const existingValues = new Set();
-            select.find('option').each(function () {
+            selectExtra.find('option').each(function () {
                 existingValues.add($(this).val());
             });
 
             dynamicCampaigns.forEach(cName => {
                 if (!existingValues.has(cName)) {
                     const displayLabel = cName + ' Yap';
-                    select.append(`<option value="${escapeHtml(cName)}" data-dynamic="true">${escapeHtml(displayLabel)}</option>`);
+                    selectExtra.append(`<option value="${escapeHtml(cName)}" data-dynamic="true">${escapeHtml(displayLabel)}</option>`);
                     existingValues.add(cName);
                 }
             });
@@ -2084,32 +2206,17 @@
             }
             if (Array.isArray(counterFilesState)) {
                 counterFilesState.forEach((item, idx) => {
-                    const minP = item.min_price;
-                    const disc = item.discount_amount;
-                    const isPct = item.discount_type === '%';
-                    const minPStr = (minP && Number.isInteger(minP)) ? parseInt(minP, 10) : minP;
-                    const discStr = (disc && Number.isInteger(disc)) ? parseInt(disc, 10) : disc;
-                    const discPart = isPct ? `%${discStr} İndirim` : `${discStr} TL İndirim`;
-                    const label = (minP > 0 || disc > 0) ? `Karşılamalı (${minPStr} TL Üzeri / ${discPart})` : (item.label || `Karşılamalı #${idx + 1}`);
-                    extraSet.add(label);
+                    extraSet.add(dynamicCampaignLabel('counter', item, idx));
                 });
             }
             if (Array.isArray(plusExtraFilesState)) {
                 plusExtraFilesState.forEach((item, idx) => {
-                    const rate = item.rate;
-                    const rateStr = (rate && Number.isInteger(rate)) ? parseInt(rate, 10) : rate;
-                    const label = rate > 0 ? `Plus Ek İndirim %${rateStr}` : (item.label || `Plus Ek İndirim #${idx + 1}`);
-                    extraSet.add(label);
+                    extraSet.add(dynamicCampaignLabel('plus_extra', item, idx));
                 });
             }
             if (Array.isArray(couponFilesState)) {
                 couponFilesState.forEach((item, idx) => {
-                    const minP = item.min_price;
-                    const disc = item.discount_amount;
-                    const minPStr = (minP && Number.isInteger(minP)) ? parseInt(minP, 10) : minP;
-                    const discStr = (disc && Number.isInteger(disc)) ? parseInt(disc, 10) : disc;
-                    const label = (minP > 0 || disc > 0) ? `${minPStr} TL Üzerine ${discStr} TL Kupon - Trendyol Plus Müşterilerine Özel` : (item.label || `Kupon #${idx + 1}`);
-                    extraSet.add(label);
+                    extraSet.add(dynamicCampaignLabel('coupon', item, idx));
                 });
             }
             if (row.userExtraSelection) {
