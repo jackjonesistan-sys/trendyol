@@ -574,6 +574,30 @@
                                         onclick="applyBulkAction()">Toplu Seçimleri Uygula</button>
                                 </div>
                             </div>
+
+                            <details id="recommendationRulePanel"
+                                class="collapse collapse-arrow bg-base-200/50 border border-base-300 mt-4 rounded-xl">
+                                <summary class="collapse-title min-h-0 py-3 text-xs font-bold text-base-content focus-visible:outline">
+                                    Önerilen Ana Kampanya Öncelik Kuralı
+                                </summary>
+                                <div class="collapse-content px-3 sm:px-4 pb-4">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3">
+                                        <div>
+                                            <p class="text-xs font-semibold text-base-content">Dip fiyatı koruyan ilk uygun kampanyayı seç</p>
+                                            <p class="text-[11px] text-base-content/60 mt-0.5">Önerilenleri Seç, aşağıdaki sırada ilk uygun Avantajlı, Flaş veya Plus kampanyasını uygular.</p>
+                                        </div>
+                                        <label class="flex items-center justify-between sm:justify-end gap-3 cursor-pointer">
+                                            <span id="recommendationRuleStatus" class="badge badge-sm badge-ghost">Etkin</span>
+                                            <input id="recommendationRuleEnabled" type="checkbox"
+                                                class="toggle toggle-primary toggle-sm"
+                                                aria-label="Ana kampanya öncelik kuralını etkinleştir"
+                                                onchange="setRecommendationRuleEnabled(this.checked)">
+                                        </label>
+                                    </div>
+                                    <ol id="recommendationPriorityList" class="list bg-base-100 rounded-box border border-base-300"
+                                        aria-label="Ana kampanya öncelik sırası" aria-live="polite"></ol>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="pt-3 border-t border-base-200 flex items-center gap-3">
@@ -756,11 +780,42 @@
     <script id="counter-configs-data" type="application/json">{{ counter_configs | tojson | safe if counter_configs is defined else '[]' }}</script>
     <script id="plus-extra-configs-data" type="application/json">{{ plus_extra_configs | tojson | safe if plus_extra_configs is defined else '[]' }}</script>
     <script id="coupon-configs-data" type="application/json">{{ coupon_configs | tojson | safe if coupon_configs is defined else '[]' }}</script>
+    <script id="recommendation-rule-data" type="application/json">{% if recommendation_rule is defined %}{{ recommendation_rule | tojson }}{% else %}{"enabled": true, "priority": ["Avantajlı", "Flaş", "Plus"]}{% endif %}</script>
 
     <script>
         let tableData = [];
         let dataTable = null;
         const reportColumns = JSON.parse(document.getElementById('report-columns-data').textContent);
+        const MAIN_CAMPAIGNS = Object.freeze(['Avantajlı', 'Flaş', 'Plus']);
+
+        function normalizeRecommendationRule(value) {
+            const priority = Array.isArray(value?.priority) ? value.priority : [];
+            const hasExactPriority = priority.length === MAIN_CAMPAIGNS.length
+                && new Set(priority).size === MAIN_CAMPAIGNS.length
+                && priority.every(campaign => MAIN_CAMPAIGNS.includes(campaign));
+            if (typeof value?.enabled !== 'boolean' || !hasExactPriority) {
+                return { enabled: true, priority: [...MAIN_CAMPAIGNS] };
+            }
+            return { enabled: value.enabled, priority: [...priority] };
+        }
+
+        function readInitialRecommendationRule() {
+            try {
+                return JSON.parse(document.getElementById('recommendation-rule-data')?.textContent || '{}');
+            } catch (error) {
+                console.error('Öneri kuralı okunamadı:', error);
+                return null;
+            }
+        }
+
+        let recommendationRule = normalizeRecommendationRule(readInitialRecommendationRule());
+        let manifestWriteQueue = Promise.resolve();
+
+        function enqueueManifestWrite(write) {
+            const operation = manifestWriteQueue.then(write);
+            manifestWriteQueue = operation.catch(() => undefined);
+            return operation;
+        }
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
@@ -801,6 +856,74 @@
                 document.documentElement.dataset.theme = theme;
                 localStorage.setItem('theme', theme);
             });
+        }
+
+        function renderRecommendationRule() {
+            const enabledInput = document.getElementById('recommendationRuleEnabled');
+            const status = document.getElementById('recommendationRuleStatus');
+            const list = document.getElementById('recommendationPriorityList');
+            if (!enabledInput || !status || !list) return;
+
+            enabledInput.checked = recommendationRule.enabled;
+            status.textContent = recommendationRule.enabled ? 'Etkin' : 'Kapalı';
+            status.className = `badge badge-sm ${recommendationRule.enabled ? 'badge-success' : 'badge-ghost'}`;
+            list.innerHTML = recommendationRule.priority.map((campaign, index) => `
+                <li class="list-row items-center px-3 py-2">
+                    <span class="badge badge-neutral badge-sm" aria-hidden="true">${index + 1}</span>
+                    <span class="list-col-grow text-xs font-semibold text-base-content">${escapeHtml(CAMPAIGN_LABELS[campaign] || campaign)}</span>
+                    <div class="join">
+                        <button type="button" class="btn btn-ghost btn-xs btn-square join-item"
+                            aria-label="${escapeHtml(campaign)} kampanyasını yukarı taşı"
+                            onclick="moveRecommendationCampaign('${campaign}', -1)" ${index === 0 ? 'disabled' : ''}>↑</button>
+                        <button type="button" class="btn btn-ghost btn-xs btn-square join-item"
+                            aria-label="${escapeHtml(campaign)} kampanyasını aşağı taşı"
+                            onclick="moveRecommendationCampaign('${campaign}', 1)" ${index === recommendationRule.priority.length - 1 ? 'disabled' : ''}>↓</button>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function persistRecommendationRule(rule) {
+            const payload = JSON.stringify({ enabled: rule.enabled, priority: [...rule.priority] });
+            return enqueueManifestWrite(async () => {
+                try {
+                    const response = await fetch('/api/recommendation-rule', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.message || 'Kayıt başarısız');
+                } catch (error) {
+                    console.error('Öneri kuralı kaydedilemedi:', error);
+                    showToast('Öneri kuralı kaydedilemedi. Lütfen yeniden deneyin.', 'error');
+                }
+            });
+        }
+
+        function updateRecommendationRule(nextRule) {
+            recommendationRule = normalizeRecommendationRule(nextRule);
+            renderRecommendationRule();
+            persistRecommendationRule({
+                enabled: recommendationRule.enabled,
+                priority: [...recommendationRule.priority]
+            });
+        }
+
+        function setRecommendationRuleEnabled(enabled) {
+            updateRecommendationRule({ ...recommendationRule, enabled });
+        }
+
+        function moveRecommendationCampaign(campaign, direction) {
+            const currentIndex = recommendationRule.priority.indexOf(campaign);
+            const targetIndex = currentIndex + direction;
+            if (currentIndex < 0 || targetIndex < 0 || targetIndex >= recommendationRule.priority.length) return;
+            const priority = recommendationRule.priority.map((item, index) => {
+                if (index === currentIndex) return recommendationRule.priority[targetIndex];
+                if (index === targetIndex) return recommendationRule.priority[currentIndex];
+                return item;
+            });
+            updateRecommendationRule({ ...recommendationRule, priority });
         }
 
         function asNumber(value) {
@@ -1091,6 +1214,7 @@
                 });
             });
             formData.append('coupon_configs_json', JSON.stringify(couponConfigs));
+            formData.append('recommendation_rule_json', JSON.stringify(recommendationRule));
 
             const singleExpiries = {};
             const singleKeys = ['discount', 'commission', 'current', 'advantage', 'flash', 'plus', 'muhasebe_avantaj', 'muhasebe_flas', 'muhasebe_plus'];
@@ -1231,6 +1355,7 @@
 
         // Initial load
         initThemeToggle();
+        renderRecommendationRule();
         loadData();
 
         window.onStockFilterChange = function onStockFilterChange(checked) {
@@ -2599,11 +2724,47 @@
                     }
                 });
             }
-            fetch('/api/save-selections', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selections: selections })
-            }).catch(err => console.error('Seçimler kaydedilirken hata:', err));
+            const payload = JSON.stringify({ selections });
+            return enqueueManifestWrite(async () => {
+                try {
+                    const response = await fetch('/api/save-selections', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                } catch (error) {
+                    console.error('Seçimler kaydedilirken hata:', error);
+                    showToast('Seçimler kaydedilemedi. Lütfen yeniden deneyin.', 'error');
+                }
+            });
+        }
+
+        function bestEligibleMainCampaign(row) {
+            const eligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : [];
+            const metrics = {
+                'Avantajlı': ['Avantajlı Ürün Kalan Net (TL)', 'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)'],
+                'Flaş': ['Flaş Ürün Kalan Net (TL)', 'Flaş Ürün 24 Saat Fiyatı (TL)'],
+                'Plus': ['Plus Net (TL)', 'Plus Fiyatı (TL)']
+            };
+            const candidates = MAIN_CAMPAIGNS
+                .filter(campaign => eligible.includes(campaign))
+                .map(campaign => {
+                    const net = asNumber(row[metrics[campaign][0]]);
+                    if (net === null) return null;
+                    return {
+                        campaign,
+                        net,
+                        price: asNumber(row[metrics[campaign][1]]) ?? Number.NEGATIVE_INFINITY
+                    };
+                })
+                .filter(Boolean);
+            const best = candidates.reduce((best, candidate) => {
+                if (!best || candidate.net > best.net) return candidate;
+                if (candidate.net === best.net && candidate.price > best.price) return candidate;
+                return best;
+            }, null);
+            return best?.campaign || row['Önerilen Kampanya'] || 'Hiçbiri';
         }
 
         function autoSelect() {
@@ -2614,7 +2775,11 @@
                     row.userSelection = 'Hiçbiri';
                     row.userExtraSelection = 'Hiçbiri';
                 } else {
-                    const rec = row['Önerilen Kampanya'] || 'Hiçbiri';
+                    const eligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : [];
+                    const priorityRecommendation = recommendationRule.priority.find(campaign => eligible.includes(campaign));
+                    const rec = recommendationRule.enabled
+                        ? (priorityRecommendation || 'Hiçbiri')
+                        : bestEligibleMainCampaign(row);
                     const recExtra = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';
                     row.userSelection = rec;
                     row.userExtraSelection = recExtra;
@@ -2630,85 +2795,6 @@
             if (dataTable) {
                 dataTable.search('').columns().search('').draw();
                 $('.filters select').val('');
-            }
-        }
-
-        function addRuleRow() {
-            const container = document.getElementById('rulesContainer');
-            const rowId = 'rule_' + Date.now();
-
-            const html = `
-                <div class="flex flex-wrap items-center gap-3 p-3 bg-base-200/50 rounded-xl border border-base-200 rule-row" id="${rowId}">
-                    <select class="select select-bordered select-sm rule-type focus:outline-none rounded-lg" onchange="changeRuleType('${rowId}')">
-                        <option value="kiyaslama">Kampanyalar Arası Kıyaslama (Avantajlı vs Flaş)</option>
-                        <option value="guncel">Güncel Satış ile Kıyaslama (Avantajlı/Flaş vs Güncel Net)</option>
-                    </select>
-                    
-                    <div class="rule-content kiyaslama-content flex items-center gap-2 flex-wrap">
-                        <span class="text-xs font-semibold">Eğer</span>
-                        <select class="select select-bordered select-sm rule-target focus:outline-none rounded-lg">
-                            <option value="Avantajlı">Avantajlı</option>
-                            <option value="Flaş">Flaş</option>
-                        </select>
-                        <span class="text-xs font-semibold">kârı,</span>
-                        <select class="select select-bordered select-sm rule-compare focus:outline-none rounded-lg">
-                            <option value="Flaş">Flaş</option>
-                            <option value="Avantajlı">Avantajlı</option>
-                        </select>
-                        <span class="text-xs font-semibold">kârından en fazla</span>
-                        <label class="input input-bordered input-sm flex items-center gap-2 w-28 rounded-lg">
-                            <input type="number" class="rule-percent w-full" placeholder="Örn: 5">
-                            <span class="opacity-50 text-xs">%</span>
-                        </label>
-                        <span class="text-xs font-semibold">az ise seçimi</span>
-                        <select class="select select-bordered select-sm rule-action focus:outline-none rounded-lg">
-                            <option value="Aynı">O Kampanya (Avantajlı/Flaş) Yap</option>
-                            <option value="Diğeri">Diğer Kampanya Yap</option>
-                            <option value="Hiçbiri">Hiçbiri Yap</option>
-                        </select>
-                    </div>
-
-                    <div class="rule-content guncel-content items-center gap-2 flex-wrap" style="display:none;">
-                        <span class="text-xs font-semibold">Eğer</span>
-                        <select class="select select-bordered select-sm rule-target-guncel focus:outline-none rounded-lg">
-                            <option value="Avantajlı">Avantajlı</option>
-                            <option value="Flaş">Flaş</option>
-                        </select>
-                        <span class="text-xs font-semibold">kârı, GÜNCEL NET kârdan</span>
-                        <select class="select select-bordered select-sm rule-operator-guncel focus:outline-none rounded-lg">
-                            <option value="fazla">Fazla (Veya Eşit) ise</option>
-                            <option value="az">Maksimum % düşüşte ise</option>
-                        </select>
-                        <label class="input input-bordered input-sm flex items-center gap-2 w-28 rounded-lg">
-                            <input type="number" class="rule-percent-guncel w-full" placeholder="Örn: 10">
-                            <span class="opacity-50 text-xs">%</span>
-                        </label>
-                        <span class="text-xs font-semibold">ise seçimi</span>
-                        <select class="select select-bordered select-sm rule-action-guncel focus:outline-none rounded-lg">
-                            <option value="Aynı">O Kampanya (Avantajlı/Flaş) Yap</option>
-                            <option value="Hiçbiri">Hiçbiri Yap</option>
-                        </select>
-                    </div>
-                    
-                    <div class="flex-1 flex justify-end">
-                        <button class="btn btn-square btn-ghost btn-xs text-error hover:bg-error/20 rounded-lg" onclick="document.getElementById('${rowId}').remove()">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0-1-1h-4a1 1 0 0-1 1v3M4 7h16" /></svg>
-                        </button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', html);
-        }
-
-        function changeRuleType(rowId) {
-            const row = document.getElementById(rowId);
-            const type = row.querySelector('.rule-type').value;
-            if (type === 'kiyaslama') {
-                row.querySelector('.kiyaslama-content').style.display = 'flex';
-                row.querySelector('.guncel-content').style.display = 'none';
-            } else {
-                row.querySelector('.kiyaslama-content').style.display = 'none';
-                row.querySelector('.guncel-content').style.display = 'flex';
             }
         }
     </script>
