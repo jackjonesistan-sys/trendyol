@@ -92,6 +92,38 @@ class TemplateContractTests(unittest.TestCase):
         self.assertIn("var(--color-info)", self.template)
         self.assertIn("var(--color-warning)", self.template)
 
+    def test_all_dynamic_discounts_support_tl_and_percent_configs(self):
+        self.assertIn("Ek İndirim (TL / % · Çoklu Yükleme)", self.template)
+        self.assertIn("function dynamicCampaignLabel(type, item, index)", self.template)
+        self.assertIn("yüzde[\\s_-]*", self.template)
+        self.assertIn("const fallbackRate = !percentMatch && !tlMatch", self.template)
+        self.assertIn("discount_type: item.discount_type || item.discount_unit || '%'", self.template)
+        self.assertIn("discount_amount: parseFloat(item.discount_amount ?? item.rate) || 0", self.template)
+        self.assertIn("min_price: parseFloat(item.min_price) || 0", self.template)
+        self.assertIn("trendyol_percent: parseFloat(item.trendyol_percent) || 0", self.template)
+        self.assertIn("updatePlusExtraParam('${item.id}', 'discount_type', this.value)", self.template)
+        self.assertIn("updateCouponParam('${item.id}', 'discount_type', this.value)", self.template)
+        self.assertIn("Ek İndirim Tutarı / Oranı", self.template)
+        self.assertIn("Kupon Tutarı / Oranı", self.template)
+        self.assertIn("Trendyol Karşılama (%)", self.template)
+        self.assertIn("discount_type: item.discount_type || '%'", self.template)
+        self.assertIn("discount_type: item.discount_type || 'TL'", self.template)
+        self.assertIn("Array.isArray(data.plus_extra_configs)", self.template)
+        self.assertIn(":not(#input_coupon_multi)", self.template)
+
+    def test_dynamic_campaign_selection_uses_customer_price_and_seller_net(self):
+        self.assertIn("asNumber(counter.customer_price)", self.template)
+        self.assertIn("asNumber(counter.net)", self.template)
+        self.assertIn(
+            "basePrice - (basePrice * (commRate / 100)) - sellerDisc",
+            self.template,
+        )
+
+    def test_dynamic_discount_campaigns_are_bulk_extra_options(self):
+        option = '<option value="${escapeHtml(cName)}" data-dynamic="true">'
+        self.assertIn("selectExtra.append(`" + option, self.template)
+        self.assertNotIn("select.append(`" + option, self.template)
+
 
 if __name__ == "__main__":
     unittest.main()

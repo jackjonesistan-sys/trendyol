@@ -30,6 +30,42 @@ class CampaignInputTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIsNone(to_float(value))
 
+    def test_campaign_configs_share_validation_and_legacy_plus_defaults(self):
+        from input_files import InputValidationError, normalize_campaign_config
+
+        legacy = normalize_campaign_config({"rate": 10}, "plus_extra")
+        self.assertEqual(
+            {key: legacy[key] for key in (
+                "min_price",
+                "discount_amount",
+                "discount_type",
+                "trendyol_percent",
+            )},
+            {
+                "min_price": 0.0,
+                "discount_amount": 10.0,
+                "discount_type": "%",
+                "trendyol_percent": 0.0,
+            },
+        )
+
+        invalid_configs = (
+            {"min_price": -1},
+            {"discount_amount": -1},
+            {"discount_type": "EUR"},
+            {"trendyol_percent": -1},
+            {"trendyol_percent": 101},
+            {"discount_type": "%", "discount_amount": 101},
+            {"min_price": float("nan")},
+            {"discount_amount": float("inf")},
+            {"trendyol_percent": float("-inf")},
+        )
+        for campaign_type in ("counter", "plus_extra", "coupon"):
+            for config in invalid_configs:
+                with self.subTest(campaign_type=campaign_type, config=config):
+                    with self.assertRaises(InputValidationError):
+                        normalize_campaign_config(config, campaign_type)
+
     def test_current_products_are_validated_by_columns_not_filename(self):
         from input_files import validate_workbook
 
@@ -645,10 +681,149 @@ class CalculatorInputTests(unittest.TestCase):
     def test_parse_coupon_filename(self):
         from input_files import parse_coupon_filename
 
-        min_p, disc, tr_p = parse_coupon_filename("750-tl-uzerine-100-tl-kupon-trendyol-plus-musterilerine-ozel-_2026-08-10_17-12_tr-TR_part_1.xlsx")
+        min_p, disc, tr_p, disc_type = parse_coupon_filename("750-tl-uzerine-100-tl-kupon-trendyol-plus-musterilerine-ozel-_2026-08-10_17-12_tr-TR_part_1.xlsx")
         self.assertEqual(min_p, 750.0)
         self.assertEqual(disc, 100.0)
         self.assertEqual(tr_p, 0.0)
+        self.assertEqual(disc_type, "TL")
+
+        percent = parse_coupon_filename(
+            "300_TL_Uzerine_%10_Kupon_%60_Trendyol_Karsilamali.xlsx"
+        )
+        self.assertEqual(percent, (300.0, 10.0, 60.0, "%"))
+
+    def test_parse_plus_extra_filename_uses_named_fields_not_first_number(self):
+        from input_files import parse_plus_extra_filename
+
+        parsed = parse_plus_extra_filename(
+            "Trendyol Plus Müşterilerine Özel 300 TL Üzerine Ek %10 İndirim "
+            "- %60 Trendyol Karşılamalı.xlsx"
+        )
+
+        self.assertEqual(parsed, (300.0, 10.0, 60.0, "%"))
+        self.assertEqual(
+            parse_plus_extra_filename(
+                "trendyol-plus-musterilerine-ozel-ek-5-indirim_2026.xlsx"
+            ),
+            (0.0, 5.0, 0.0, "%"),
+        )
+        self.assertEqual(
+            parse_plus_extra_filename(
+                "Trendyol Plus Müşterilerine Özel Ek yüzde10 İndirim.xlsx"
+            ),
+            (0.0, 10.0, 0.0, "%"),
+        )
+
+    def test_extra_campaigns_share_customer_price_and_seller_net_contract(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            campaign = root / "campaign.xlsx"
+
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "Eski Fiyat": 400,
+                "YENİ Fiyat": 300,
+                "Durum": "İndirim",
+            }]).to_excel(discount, index=False)
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "1.Fiyat Alt Limit": 0,
+                "2.Fiyat Üst Limiti": None,
+                "2.Fiyat Alt Limit": None,
+                "3.Fiyat Üst Limiti": None,
+                "3.Fiyat Alt Limit": None,
+                "4.Fiyat Üst Limiti": None,
+                "1.KOMİSYON": 10,
+                "2.KOMİSYON": 10,
+                "3.KOMİSYON": 10,
+                "4.KOMİSYON": 10,
+                "KOMİSYONA ESAS FİYAT": 400,
+                "TARİFE GRUBU": "T",
+            }]).to_excel(commission, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Komisyon Oranı": 10,
+                "Piyasa Satış Fiyatı (KDV Dahil)": 400,
+                "Trendyol'da Satılacak Fiyat (KDV Dahil)": 400,
+            }]).to_excel(current, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Maksimum Girebileceğin Fiyat": 400,
+                "Kampanyalı Satış Fiyatı": None,
+            }]).to_excel(campaign, index=False)
+
+            counter_label = "Karşılamalı Yüzde"
+            coupon_label = "Yüzde Kupon"
+            advanced_plus_label = (
+                "Plus Ek İndirim (300 TL Üzeri / %25 İndirim / "
+                "%60 Trendyol Karşılamalı)"
+            )
+            legacy_plus_label = "Plus Ek İndirim %10"
+            below_dip_label = "Plus Ek İndirim Dip Altı"
+            result = calculate_all(
+                {"discount": discount, "commission": commission, "current": current},
+                counter_files=[{
+                    "path": campaign,
+                    "label": counter_label,
+                    "min_price": 300,
+                    "discount_type": "%",
+                    "discount_amount": 10,
+                    "trendyol_percent": 60,
+                }],
+                coupon_files=[{
+                    "path": campaign,
+                    "label": coupon_label,
+                    "min_price": 300,
+                    "discount_type": "%",
+                    "discount_amount": 25,
+                    "trendyol_percent": 50,
+                }],
+                plus_extra_files=[
+                    {
+                        "path": campaign,
+                        "min_price": 300,
+                        "discount_type": "%",
+                        "discount_amount": 25,
+                        "trendyol_percent": 60,
+                    },
+                    {"path": campaign, "rate": 10},
+                    {
+                        "path": campaign,
+                        "label": below_dip_label,
+                        "discount_type": "%",
+                        "discount_amount": 30,
+                    },
+                ],
+                output_dir=root / "output",
+            )
+
+            row = result["results"][0]
+            evaluations = row["counter_evaluations"]
+            expected = {
+                counter_label: (360, 344, 16, "%", 10, 60),
+                coupon_label: (300, 310, 50, "%", 25, 50),
+                advanced_plus_label: (300, 320, 40, "%", 25, 60),
+                legacy_plus_label: (360, 320, 40, "%", 10, 0),
+            }
+            for label, values in expected.items():
+                with self.subTest(label=label):
+                    evaluation = evaluations[label]
+                    self.assertEqual(evaluation["price"], 400)
+                    self.assertEqual(evaluation["customer_price"], values[0])
+                    self.assertEqual(evaluation["net"], values[1])
+                    self.assertEqual(evaluation["seller_disc"], values[2])
+                    self.assertEqual(evaluation["min_price"], 300 if label not in (legacy_plus_label,) else 0)
+                    self.assertEqual(evaluation["disc_type"], values[3])
+                    self.assertEqual(evaluation["disc_val"], values[4])
+                    self.assertEqual(evaluation["trendyol_percent"], values[5])
+
+            self.assertNotIn(below_dip_label, evaluations)
+            self.assertNotIn(below_dip_label, row["eligible_extra_campaigns"])
 
     def test_disabled_campaign_files_are_ignored_in_calculation(self):
         from komisyon_hesaplayici import calculate_all

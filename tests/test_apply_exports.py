@@ -230,6 +230,127 @@ class ApplyExportTests(unittest.TestCase):
             unapplied = pd.read_excel(run_dir / "Uygulanmayan_Urunler_Raporu.xlsx")
             self.assertTrue(unapplied.empty)
 
+    def test_plus_extra_only_target_exports_evaluated_customer_price_and_config_name(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            plus_extra = root / "plus-extra.xlsx"
+            label = (
+                "Plus Ek İndirim (300 TL Üzeri / 50 TL İndirim / "
+                "%60 Trendyol Karşılamalı)"
+            )
+            write_workbook(
+                plus_extra,
+                ["Barkod", "Maksimum Girebileceğin Fiyat", "Kampanyalı Satış Fiyatı"],
+                [["E-1", 400, None]],
+            )
+            (root / "manifest.json").write_text(
+                json.dumps({
+                    "files": {},
+                    "plus_extra_configs": [{
+                        "path": str(plus_extra),
+                        "label": label,
+                        "min_price": 300,
+                        "discount_amount": 50,
+                        "discount_type": "TL",
+                        "trendyol_percent": 60,
+                    }],
+                }),
+                encoding="utf-8",
+            )
+            row = {
+                "Barkod": "E-1",
+                "Stok Adedi": 1,
+                "İlk Kampanya Seçimi": "Hiçbiri",
+                "İlk Ekstra Kampanya Seçimi": "Hiçbiri",
+                "Uygulanabilir Kampanyalar": "Plus Ek İndirim",
+                "eligible_main_campaigns": ["Hiçbiri"],
+                "eligible_extra_campaigns": ["Hiçbiri", label],
+                "counter_evaluations": {
+                    label: {
+                        "price": 400,
+                        "customer_price": 350,
+                        "net": 330,
+                        "rate": 10,
+                        "seller_disc": 20,
+                        "min_price": 300,
+                        "disc_type": "TL",
+                        "disc_val": 50,
+                        "trendyol_percent": 60,
+                    }
+                },
+            }
+
+            response, output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {},
+                {
+                    "target_type": "Plus Ek İndirim",
+                    "selections": {"E-1": {"main": "Hiçbiri", "extra": label}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            generated = response.get_json()["generated_files"]
+            extra_name = next(Path(name).name for name in generated if "Trendyol_Plus" in name)
+            self.assertIn("300_TL_Uzeri", extra_name)
+            self.assertIn("50_TL_Indirim", extra_name)
+            self.assertIn("%60_Trendyol_Karsilamali", extra_name)
+            exported = openpyxl.load_workbook(
+                output_dir / response.get_json()["timestamp_folder"] / extra_name
+            ).active
+            self.assertEqual(exported["C2"].value, 350)
+
+    def test_percent_coupon_export_filename_keeps_discount_type(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            coupon = root / "coupon.xlsx"
+            label = "300 TL Üzerine %25 Kupon"
+            write_workbook(
+                coupon,
+                ["Barkod", "Eklenecek Ürünleri Seçiniz"],
+                [["C-1", None]],
+            )
+            (root / "manifest.json").write_text(
+                json.dumps({
+                    "files": {},
+                    "coupon_configs": [{
+                        "path": str(coupon),
+                        "label": label,
+                        "min_price": 300,
+                        "discount_amount": 25,
+                        "discount_type": "%",
+                        "trendyol_percent": 60,
+                    }],
+                }),
+                encoding="utf-8",
+            )
+            row = {
+                "Barkod": "C-1",
+                "Stok Adedi": 1,
+                "Uygulanabilir Kampanyalar": label,
+                "eligible_main_campaigns": ["Hiçbiri"],
+                "eligible_extra_campaigns": ["Hiçbiri", label],
+            }
+
+            response, _output_dir = self.apply_from_temp(
+                root,
+                [row],
+                {},
+                {
+                    "target_type": "Hepsi",
+                    "selections": {"C-1": {"main": "Hiçbiri", "extra": label}},
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+            coupon_name = next(
+                Path(name).name
+                for name in response.get_json()["generated_files"]
+                if "Kupon" in name
+            )
+            self.assertIn("_%25_Kupon_", coupon_name)
+
     def test_selection_payload_and_number_validation_fail_closed(self):
         self.assertFalse(
             app.selection_payload_is_valid({"A1": {"main": "Bilinmeyen", "extra": "Hiçbiri"}})
@@ -240,6 +361,41 @@ class ApplyExportTests(unittest.TestCase):
         for value in ("nan", float("nan"), "inf", float("inf"), "-inf"):
             with self.subTest(value=value):
                 self.assertIsNone(app.as_number(value))
+
+    def test_calculate_rejects_non_finite_campaign_config_with_validation_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest = root / "manifest.json"
+            manifest.write_text('{"files": {}}', encoding="utf-8")
+            upload = root / "uploads"
+            output = root / "output"
+            upload.mkdir()
+            output.mkdir()
+            with (
+                patch.object(app, "UPLOAD_DIR", str(upload)),
+                patch.object(app, "OUTPUT_DIR", str(output)),
+                patch.object(app, "INPUT_MANIFEST", str(manifest)),
+                patch.object(app, "save_upload_set", return_value={
+                    "discount": "discount.xlsx",
+                    "commission": "commission.xlsx",
+                    "current": "current.xlsx",
+                }),
+                patch(
+                    "komisyon_hesaplayici.calculate_all",
+                    return_value={"success": False, "message": "should not run"},
+                ),
+            ):
+                response = self.client.post(
+                    "/api/calculate",
+                    data={
+                        "plus_extra_configs_json": json.dumps(
+                            [{"rate": float("nan")}]
+                        )
+                    },
+                )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("sonlu", response.get_json()["message"])
 
     def test_calculate_rejects_missing_discount_even_if_loader_returns_other_base_inputs(self):
         with patch.object(
