@@ -944,9 +944,29 @@
             return [amount, round2((amount / current) * 100)];
         }
 
-        function selectedCampaignValues(row) {
-            const mainSel = row.userSelection || 'Hiçbiri';
-            const extraSel = row.userExtraSelection || 'Hiçbiri';
+        function optionIsEligible(row, key, value) {
+            if (!value || value === 'Hiçbiri') return true;
+            const options = row[key];
+            if (!Array.isArray(options)) return true;
+            return options.includes(value);
+        }
+
+        function eligibleSelections(row, mainOverride, extraOverride) {
+            const mainSel = mainOverride === undefined ? (row.userSelection || 'Hiçbiri') : mainOverride;
+            const extraSel = extraOverride === undefined ? (row.userExtraSelection || 'Hiçbiri') : extraOverride;
+            return [
+                optionIsEligible(row, 'eligible_main_campaigns', mainSel) ? mainSel : 'Hiçbiri',
+                optionIsEligible(row, 'eligible_extra_campaigns', extraSel) ? extraSel : 'Hiçbiri'
+            ];
+        }
+
+        function selectionFloor(row, mainSelection) {
+            const contextualFloor = asNumber(row.campaign_floor_prices?.[mainSelection]);
+            return contextualFloor ?? asNumber(row['Düşülebilecek Dip Fiyat (TL)']);
+        }
+
+        function selectedCampaignValues(row, mainOverride, extraOverride) {
+            const [mainSel, extraSel] = eligibleSelections(row, mainOverride, extraOverride);
 
             let basePrice = null;
             let baseNet = null;
@@ -985,7 +1005,7 @@
                 const trendyolPercent = asNumber(counter.trendyol_percent) ?? 0;
                 const evaluationRate = asNumber(counter.rate) ?? baseComm ?? 0;
 
-                if (mainSel !== 'Hiçbiri' && basePrice !== null && evaluationBasePrice !== null && basePrice < evaluationBasePrice) {
+                if (mainSel !== 'Hiçbiri' && basePrice !== null) {
                     const totDisc = discType === '%' ? round2(basePrice * (discVal / 100)) : discVal;
                     const sellerDisc = round2(totDisc * (1 - (trendyolPercent / 100)));
                     const finalPrice = round2(basePrice - totDisc);
@@ -1014,24 +1034,94 @@
             if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim %')) {
                 const rate = Number(extraSel.split('%').pop());
                 if (!isNaN(rate)) {
-                    const finalPrice = round2(basePrice * (1 - (rate / 100)));
-                    const finalComm = baseComm;
-                    const commRate = finalComm ?? 0;
-                    const finalNet = round2(finalPrice - (finalPrice * (commRate / 100)));
-                    return [finalPrice, finalNet, finalComm];
+                    const rateKey = Number.isInteger(rate) ? String(rate) : String(rate);
+                    const storedPrice = asNumber(row[`Plus Ek Fiyatı %${rateKey} (TL)`]);
+                    const storedNet = asNumber(row[`Plus Ek Net %${rateKey} (TL)`]);
+                    const storedComm = asNumber(row['Plus Ek Komisyon (%)']);
+                    const commRate = mainSel !== 'Hiçbiri'
+                        ? (baseComm ?? storedComm ?? 0)
+                        : (storedComm ?? baseComm ?? 0);
+                    if (mainSel === 'Hiçbiri' && storedPrice !== null && storedNet !== null) {
+                        return [storedPrice, storedNet, commRate];
+                    }
+                    if (basePrice === null) return [basePrice, baseNet, baseComm];
+                    const totalDiscount = round2(basePrice * (rate / 100));
+                    const sellerDiscount = totalDiscount;
+                    const finalPrice = round2(basePrice - totalDiscount);
+                    const finalNet = round2(basePrice - (basePrice * (commRate / 100)) - sellerDiscount);
+                    return [finalPrice, finalNet, commRate];
                 }
             }
 
             return [basePrice, baseNet, baseComm];
         }
 
+        function selectionPairIsSafe(row, mainSelection, extraSelection) {
+            const mainSel = mainSelection || 'Hiçbiri';
+            const extraSel = extraSelection || 'Hiçbiri';
+            if (!optionIsEligible(row, 'eligible_main_campaigns', mainSel)
+                || !optionIsEligible(row, 'eligible_extra_campaigns', extraSel)) {
+                return false;
+            }
+            const mainPriceFields = {
+                'Avantajlı': 'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)',
+                'Flaş': 'Flaş Ürün 24 Saat Fiyatı (TL)',
+                'Plus': 'Plus Fiyatı (TL)'
+            };
+            if (mainSel !== 'Hiçbiri'
+                && asNumber(row[mainPriceFields[mainSel]]) === null) {
+                return false;
+            }
+            if (mainSel === 'Hiçbiri' && extraSel === 'Hiçbiri') return true;
+            const evaluation = row.counter_evaluations?.[extraSel];
+            const requiresEvaluation = extraSel.startsWith('Karşılamalı')
+                || extraSel.includes('Kupon')
+                || extraSel.startsWith('Plus Ek İndirim (');
+            if (requiresEvaluation
+                && (!evaluation || typeof evaluation !== 'object' || Array.isArray(evaluation))) {
+                return false;
+            }
+            if (mainSel !== 'Hiçbiri' && extraSel !== 'Hiçbiri' && evaluation) {
+                const minimumPrice = asNumber(evaluation?.min_price);
+                const sourceMaximumPrice = asNumber(evaluation?.price);
+                const selectedBasePrice = selectedCampaignValues(row, mainSel, 'Hiçbiri')[0];
+                if (selectedBasePrice === null
+                    || (minimumPrice !== null && round2(selectedBasePrice) < round2(minimumPrice))
+                    || (sourceMaximumPrice !== null && round2(selectedBasePrice) > round2(sourceMaximumPrice))) {
+                    return false;
+                }
+            }
+            const [finalPrice] = selectedCampaignValues(row, mainSel, extraSel);
+            const floorPrice = selectionFloor(row, mainSel);
+            return finalPrice !== null
+                && finalPrice > 0
+                && (floorPrice === null || round2(finalPrice) >= round2(floorPrice));
+        }
+
+        function sanitizedSelections(row, mainOverride, extraOverride) {
+            const requestedMain = mainOverride === undefined ? (row.userSelection || 'Hiçbiri') : mainOverride;
+            const requestedExtra = extraOverride === undefined ? (row.userExtraSelection || 'Hiçbiri') : extraOverride;
+            const mainSel = selectionPairIsSafe(row, requestedMain, 'Hiçbiri') ? requestedMain : 'Hiçbiri';
+            const extraSel = selectionPairIsSafe(row, mainSel, requestedExtra) ? requestedExtra : 'Hiçbiri';
+            return [mainSel, extraSel];
+        }
+
+        function normalizedSelections(row) {
+            return sanitizedSelections(row);
+        }
+
+        function normalizeRowSelectionsInPlace(row) {
+            const [mainSel, extraSel] = sanitizedSelections(row);
+            row.userSelection = mainSel;
+            row.userExtraSelection = extraSel;
+        }
+
         function buildReportRow(row) {
-            const mainSel = row.userSelection || 'Hiçbiri';
-            const extraSel = row.userExtraSelection || 'Hiçbiri';
+            const [mainSel, extraSel] = normalizedSelections(row);
             const currentPrice = asNumber(row['Güncel Ürün Fiyatı (TL)']);
-            const [campaignPrice, campaignNet, campaignCommission] = selectedCampaignValues(row);
+            const [campaignPrice, campaignNet, campaignCommission] = selectedCampaignValues(row, mainSel, extraSel);
             const [appliedAmount, appliedPercent] = discountBetween(currentPrice, campaignPrice);
-            const dipPrice = asNumber(row['Düşülebilecek Dip Fiyat (TL)']);
+            const dipPrice = selectionFloor(row, mainSel);
             const [availableAmount, availablePercent] = (dipPrice !== null && currentPrice !== null)
                 ? discountBetween(currentPrice, dipPrice)
                 : [null, null];
@@ -1044,16 +1134,16 @@
             
             let plusExtraPrice = null;
             let plusExtraNet = null;
+            let counterPrice = null;
+            let counterNet = null;
             if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim')) {
-                const evaluation = row.counter_evaluations?.[extraSel];
-                if (evaluation) {
-                    plusExtraPrice = campaignPrice;
-                    plusExtraNet = campaignNet;
-                } else if (extraSel.startsWith('Plus Ek İndirim %')) {
-                    const rate = Number(extraSel.split('%').pop());
-                    plusExtraPrice = asNumber(row[`Plus Ek Fiyatı %${rate} (TL)`]);
-                    plusExtraNet = asNumber(row[`Plus Ek Net %${rate} (TL)`]);
-                }
+                plusExtraPrice = campaignPrice;
+                plusExtraNet = campaignNet;
+            }
+            if (typeof extraSel === 'string'
+                && extraSel.startsWith('Karşılamalı') && row.counter_evaluations?.[extraSel]) {
+                counterPrice = campaignPrice;
+                counterNet = campaignNet;
             }
 
             return {
@@ -1069,6 +1159,8 @@
                 'Plus Net': asNumber(row['Plus Net (TL)']),
                 'Plus Ek İndirim Fiyat (TL)': plusExtraPrice,
                 'Plus Ek İndirim Net': plusExtraNet,
+                'Karşılamalı Kampanya Fiyat (TL)': counterPrice,
+                'Karşılamalı Kampanya Net': counterNet,
                 'Uygulanan Kampanya': CAMPAIGN_LABELS[mainSel] || mainSel,
                 'Ekstra Kampanya': CAMPAIGN_LABELS[extraSel] || extraSel,
                 'Uygulanan Kampanya Fiyat': campaignPrice,
@@ -1124,6 +1216,7 @@
                         _index: index,
                         checked: false
                     }));
+                    tableData.forEach(normalizeRowSelectionsInPlace);
                     renderTable();
                     updateBulkCampaignOptions();
                     updateTableStats();
@@ -1301,13 +1394,15 @@
             tableData.forEach(row => {
                 const stok = asNumber(row['Stok Adedi']);
                 if (ignoreZeroStockChecked && stok !== null && stok === 0) {
-                    selections[row.Barkod] = { main: 'Hiçbiri', extra: 'Hiçbiri' };
+                    row.userSelection = 'Hiçbiri';
+                    row.userExtraSelection = 'Hiçbiri';
                 } else {
-                    selections[row.Barkod] = {
-                        main: row.userSelection || 'Hiçbiri',
-                        extra: row.userExtraSelection || 'Hiçbiri'
-                    };
+                    normalizeRowSelectionsInPlace(row);
                 }
+                selections[row.Barkod] = {
+                    main: row.userSelection || 'Hiçbiri',
+                    extra: row.userExtraSelection || 'Hiçbiri'
+                };
             });
 
             document.getElementById('loadingOverlay').style.display = 'flex';
@@ -2137,41 +2232,50 @@
             return Array.from(filterValues).sort();
         }
 
+        function refreshTableRow(row) {
+            if (!dataTable || !row) return;
+            const tableRow = dataTable.row((_, candidate) => candidate?._index === row._index);
+            if (tableRow.any()) tableRow.data(row).invalidate().draw(false);
+        }
+
         function updateSelection(index, val) {
-            const row = tableData[index];
-            tableData[index].userSelection = val;
+            const row = tableData.find(candidate => candidate._index === index);
+            if (!row) return;
+            normalizeRowSelectionsInPlace(row);
+            const previousExtra = row.userExtraSelection;
 
-            const [campaignPrice] = selectedCampaignValues(tableData[index]);
-            const dipPrice = asNumber(tableData[index]['Düşülebilecek Dip Fiyat (TL)']);
-            if (val !== 'Hiçbiri' && campaignPrice !== null && dipPrice !== null && campaignPrice < dipPrice) {
-                showToast(`Uyarı: (${row.Barkod}) ürünü için seçtiğiniz Ana Kampanya '${val}' fiyatı (${campaignPrice} TL) dip fiyat sınırının (${dipPrice} TL) altındadır!`, 'warning');
-            }
-
-            if (dataTable) {
-                const rowNode = dataTable.row(index).node();
-                if (rowNode) {
-                    dataTable.row(rowNode).data(tableData[index]).draw(false);
+            if (!selectionPairIsSafe(row, val, 'Hiçbiri')) {
+                row.userSelection = 'Hiçbiri';
+                showToast(`Uyarı: (${row.Barkod}) ürünü için seçtiğiniz Ana Kampanya '${val}' dip fiyat veya uygunluk sınırını geçemedi.`, 'warning');
+            } else {
+                row.userSelection = val;
+                if (!selectionPairIsSafe(row, val, previousExtra)) {
+                    row.userExtraSelection = 'Hiçbiri';
+                    if (previousExtra !== 'Hiçbiri') {
+                        showToast(`(${row.Barkod}) için mevcut ekstra kampanya yeni ana kampanyanın dip sınırını geçtiği için temizlendi.`, 'warning');
+                    }
                 }
             }
+
+            normalizeRowSelectionsInPlace(row);
+            refreshTableRow(row);
             saveUserSelections();
         }
 
         function updateExtraSelection(index, val) {
-            const row = tableData[index];
-            tableData[index].userExtraSelection = val;
+            const row = tableData.find(candidate => candidate._index === index);
+            if (!row) return;
+            normalizeRowSelectionsInPlace(row);
 
-            const [campaignPrice] = selectedCampaignValues(tableData[index]);
-            const dipPrice = asNumber(tableData[index]['Düşülebilecek Dip Fiyat (TL)']);
-            if (val !== 'Hiçbiri' && campaignPrice !== null && dipPrice !== null && campaignPrice < dipPrice) {
-                showToast(`Uyarı: (${row.Barkod}) ürünü için seçtiğiniz Ekstra Kampanya '${val}' fiyatı (${campaignPrice} TL) dip fiyat sınırının (${dipPrice} TL) altındadır!`, 'warning');
+            if (!selectionPairIsSafe(row, row.userSelection, val)) {
+                row.userExtraSelection = 'Hiçbiri';
+                showToast(`Uyarı: (${row.Barkod}) ürünü için seçtiğiniz Ekstra Kampanya '${val}' dip fiyat veya uygunluk sınırını geçemedi.`, 'warning');
+            } else {
+                row.userExtraSelection = val;
             }
 
-            if (dataTable) {
-                const rowNode = dataTable.row(index).node();
-                if (rowNode) {
-                    dataTable.row(rowNode).data(tableData[index]).draw(false);
-                }
-            }
+            normalizeRowSelectionsInPlace(row);
+            refreshTableRow(row);
             saveUserSelections();
         }
 
@@ -2206,6 +2310,7 @@
                     if (targetExtra !== 'NO_CHANGE') {
                         row.userExtraSelection = targetExtra;
                     }
+                    normalizeRowSelectionsInPlace(row);
                     appliedCount++;
                 }
             });
@@ -2258,13 +2363,13 @@
 
         function dipPriceBadgesHtml(row) {
             const dipDetails = Array.isArray(row.dip_details) ? row.dip_details : [];
+            const [activeMain] = normalizedSelections(row);
+            const activeFloor = selectionFloor(row, activeMain);
+            const activeFloorBadge = activeFloor === null
+                ? ''
+                : `<span class="badge badge-success badge-outline badge-xs text-[10px] py-1.5 px-2 rounded-md whitespace-nowrap">Aktif sınır: ${activeFloor.toFixed(2)} TL</span>`;
             if (!dipDetails.length) {
-                const eligible = row['İndirim Uygulanabilir'] === 'Evet';
-                const singleDip = eligible ? asNumber(row['Düşülebilecek Dip Fiyat (TL)']) : null;
-                if (singleDip !== null) {
-                    return `<span class="font-semibold text-xs text-base-content/90">${singleDip.toFixed(2)} TL</span>`;
-                }
-                return '<span class="text-[10px] text-base-content/40">-</span>';
+                return activeFloorBadge || '<span class="text-[10px] text-base-content/40">-</span>';
             }
 
             const badgeColorMap = {
@@ -2284,26 +2389,26 @@
                 return `<span class="badge ${colorClass} badge-xs text-[10px] py-1.5 px-2 rounded-md whitespace-nowrap">${typeLabel}: ${priceVal} TL</span>`;
             }).join(' ');
 
-            return `<div class="flex flex-wrap gap-1 max-w-[210px]">${badges}</div>`;
+            return `<div class="flex flex-wrap gap-1 max-w-[210px]">${activeFloorBadge}${badges}</div>`;
         }
 
         function campaignSelectionHtml(row) {
             const rowIndex = row._index;
+            const [selectedMain] = normalizedSelections(row);
             const matching = (Array.isArray(row.all_matching_main_campaigns) && row.all_matching_main_campaigns.length)
                 ? row.all_matching_main_campaigns
                 : ['Hiçbiri', 'Avantajlı', 'Flaş', 'Plus'];
 
-            const safeEligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : ['Hiçbiri'];
-
             let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
 
             matching.forEach(cName => {
-                const isSelected = (row.userSelection || 'Hiçbiri') === cName;
+                const isSelected = selectedMain === cName;
                 const displayLabel = CAMPAIGN_LABELS[cName] || cName;
-                const isSafe = safeEligible.includes(cName);
+                const isSafe = selectionPairIsSafe(row, cName, 'Hiçbiri');
                 const isBelowDip = cName !== 'Hiçbiri' && !isSafe;
                 const tag = isBelowDip ? ' (Dip Altı)' : '';
-                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}>${escapeHtml(displayLabel + tag)}</option>`;
+                const disabledAttr = isSafe ? '' : ' disabled';
+                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}${disabledAttr}>${escapeHtml(displayLabel + tag)}</option>`;
             });
 
             selectHtml += '</select>';
@@ -2312,7 +2417,7 @@
                 .filter(c => c !== 'Hiçbiri')
                 .map(cName => {
                     const label = CAMPAIGN_LABELS[cName] || cName;
-                    const isSafe = safeEligible.includes(cName);
+                    const isSafe = selectionPairIsSafe(row, cName, 'Hiçbiri');
                     const badgeClass = isSafe ? 'badge-outline badge-primary font-semibold' : 'badge-outline border-warning/80 text-warning font-medium';
                     const titleAttr = isSafe ? '' : ' title="Fiyat dip fiyat sınırının altındadır"';
                     return `<span class="badge ${badgeClass} badge-xs h-auto min-h-5 max-w-full justify-start whitespace-normal break-words px-2 py-1 text-left text-[10px] leading-tight rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
@@ -2324,6 +2429,7 @@
 
         function extraSelectionHtml(row) {
             const rowIndex = row._index;
+            const [selectedMain, selectedExtra] = normalizedSelections(row);
 
             const extraSet = new Set(['Hiçbiri']);
             if (Array.isArray(row.all_matching_extra_campaigns)) {
@@ -2349,18 +2455,17 @@
             }
 
             const matchingList = Array.from(extraSet);
-            const safeEligible = Array.isArray(row.eligible_extra_campaigns) ? row.eligible_extra_campaigns : ['Hiçbiri'];
-
             let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ekstra kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
 
             matchingList.forEach(cName => {
-                const isSelected = (row.userExtraSelection || 'Hiçbiri') === cName;
+                const isSelected = selectedExtra === cName;
                 const displayLabel = CAMPAIGN_LABELS[cName] || cName;
-                const isSafe = safeEligible.includes(cName);
+                const isSafe = selectionPairIsSafe(row, selectedMain, cName);
                 const isBelowDip = cName !== 'Hiçbiri' && !isSafe;
 
                 let extraTag = isBelowDip ? ' (Dip Altı)' : '';
-                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}>${escapeHtml(displayLabel + extraTag)}</option>`;
+                const disabledAttr = isSafe ? '' : ' disabled';
+                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}${disabledAttr}>${escapeHtml(displayLabel + extraTag)}</option>`;
             });
 
             selectHtml += '</select>';
@@ -2369,7 +2474,7 @@
                 .filter(c => c !== 'Hiçbiri')
                 .map(cName => {
                     const label = CAMPAIGN_LABELS[cName] || cName;
-                    const isSafe = safeEligible.includes(cName);
+                    const isSafe = selectionPairIsSafe(row, selectedMain, cName);
                     const badgeClass = isSafe ? 'badge-outline badge-accent font-semibold' : 'badge-outline border-warning/80 text-warning font-medium';
                     const titleAttr = isSafe ? '' : ' title="Fiyat dip fiyat sınırının altındadır"';
                     return `<span class="badge ${badgeClass} badge-xs h-auto min-h-5 max-w-full justify-start whitespace-normal break-words px-2 py-1 text-left text-[10px] leading-tight rounded-md"${titleAttr}>${escapeHtml(label)}</span>`;
@@ -2684,9 +2789,8 @@
         }
 
         function updateCheck(index, isChecked) {
-            if (tableData[index]) {
-                tableData[index].checked = isChecked;
-            }
+            const row = tableData.find(candidate => candidate._index === index);
+            if (row) row.checked = isChecked;
             updateTableStats();
         }
 
@@ -2716,6 +2820,7 @@
             const selections = {};
             if (Array.isArray(tableData)) {
                 tableData.forEach(row => {
+                    normalizeRowSelectionsInPlace(row);
                     if (row.Barkod) {
                         selections[row.Barkod] = {
                             main: row.userSelection || 'Hiçbiri',
@@ -2767,6 +2872,26 @@
             return best?.campaign || row['Önerilen Kampanya'] || 'Hiçbiri';
         }
 
+        function bestEligibleExtraCampaign(row, selectedMain) {
+            const eligible = Array.isArray(row.eligible_extra_campaigns) ? row.eligible_extra_campaigns : [];
+            const candidates = eligible
+                .filter(campaign => campaign !== 'Hiçbiri')
+                .filter(campaign => selectionPairIsSafe(row, selectedMain, campaign))
+                .map(campaign => {
+                    const [price, net] = selectedCampaignValues(row, selectedMain, campaign);
+                    return net === null ? null : { campaign, net, price };
+                })
+                .filter(Boolean);
+            const best = candidates.reduce((best, candidate) => {
+                if (!best || candidate.net > best.net) return candidate;
+                if (candidate.net === best.net && candidate.price > best.price) return candidate;
+                if (candidate.net === best.net && candidate.price === best.price
+                    && candidate.campaign < best.campaign) return candidate;
+                return best;
+            }, null);
+            return best?.campaign || 'Hiçbiri';
+        }
+
         function autoSelect() {
             let selectedCount = 0;
             tableData.forEach(row => {
@@ -2780,9 +2905,10 @@
                     const rec = recommendationRule.enabled
                         ? (priorityRecommendation || 'Hiçbiri')
                         : bestEligibleMainCampaign(row);
-                    const recExtra = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';
+                    const recExtra = bestEligibleExtraCampaign(row, rec);
                     row.userSelection = rec;
                     row.userExtraSelection = recExtra;
+                    normalizeRowSelectionsInPlace(row);
                     if (row.userSelection !== 'Hiçbiri' || row.userExtraSelection !== 'Hiçbiri') selectedCount++;
                 }
             });

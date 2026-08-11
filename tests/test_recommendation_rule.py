@@ -179,9 +179,13 @@ class RecommendationRuleTests(unittest.TestCase):
     def test_save_selections_persists_canonical_values_and_accepts_legacy_strings(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             manifest = Path(temp_dir) / "manifest.json"
+            result = Path(temp_dir) / "missing-result.xlsx"
             manifest.write_text('{"files": {}, "marker": 1}', encoding="utf-8")
 
-            with patch.object(app, "INPUT_MANIFEST", str(manifest)):
+            with (
+                patch.object(app, "INPUT_MANIFEST", str(manifest)),
+                patch.object(app, "F_HESAP", str(result)),
+            ):
                 response = self.client.post(
                     "/api/save-selections",
                     json={

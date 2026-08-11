@@ -12,6 +12,18 @@ from openpyxl.worksheet.table import Table
 import app
 
 
+def current_result_row(row=None):
+    return {
+        "Barkod": "A1",
+        "campaign_floor_prices": {},
+        "eligible_main_campaigns": ["Hiçbiri"],
+        "eligible_extra_campaigns": ["Hiçbiri"],
+        "counter_evaluations": {},
+        "flash_evaluations": [],
+        **(row or {}),
+    }
+
+
 def write_workbook(path, headers, rows):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
@@ -26,11 +38,58 @@ class ApplyExportTests(unittest.TestCase):
         app.app.config["TESTING"] = True
         self.client = app.app.test_client()
 
-    def apply_from_temp(self, root, result_rows, input_files, payload):
+    def test_apply_rejects_old_result_schema_before_export(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output_dir = root / "output"
+            output_dir.mkdir()
+            result_path = root / "result.xlsx"
+            old_row = current_result_row()
+            old_row.pop("campaign_floor_prices")
+            pd.DataFrame([old_row]).to_excel(result_path, index=False)
+
+            with (
+                patch.object(app, "OUTPUT_DIR", str(output_dir)),
+                patch.object(app, "F_HESAP", str(result_path)),
+                patch.object(app, "INPUT_MANIFEST", str(root / "manifest.json")),
+                patch.object(app, "load_upload_set", return_value={}),
+            ):
+                response = self.client.post(
+                    "/api/apply",
+                    json={"target_type": "Hepsi", "selections": {}},
+                )
+
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(output_dir.iterdir()), [])
+
+    def test_apply_accepts_current_result_schema(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            response, _output_dir = self.apply_from_temp(
+                Path(temp_dir),
+                [{"Barkod": "A1", "Stok Adedi": 1}],
+                {},
+                {
+                    "target_type": "Hepsi",
+                    "selections": {
+                        "A1": {"main": "Hiçbiri", "extra": "Hiçbiri"}
+                    },
+                },
+            )
+
+            self.assertEqual(response.status_code, 200, response.get_json())
+
+    def apply_from_temp(
+        self, root, result_rows, input_files, payload, current_schema=True
+    ):
         output_dir = root / "output"
         output_dir.mkdir()
         result_path = root / "result.xlsx"
-        pd.DataFrame(result_rows).to_excel(result_path, index=False)
+        rows = (
+            [current_result_row(row) for row in result_rows]
+            if current_schema
+            else result_rows
+        )
+        pd.DataFrame(rows).to_excel(result_path, index=False)
         manifest_path = root / "manifest.json"
         if not manifest_path.exists():
             manifest_path.write_text('{"files": {}}', encoding="utf-8")
@@ -68,7 +127,7 @@ class ApplyExportTests(unittest.TestCase):
                 "source_row": ["F-1", 85],
                 "result_price": {"Flaş Ürün 24 Saat Fiyatı (TL)": 82},
                 "filename": "Flas_Urunler_Genel.xlsx",
-                "price_header": "24 Saat Fiyat",
+                "price_header": "Senin Belirlediğin Flaş Fiyatı",
                 "price": 82,
             },
             {
@@ -99,6 +158,15 @@ class ApplyExportTests(unittest.TestCase):
                     "eligible_extra_campaigns": ["Hiçbiri"],
                     **case["result_price"],
                 }
+                if case["campaign"] == "Flaş":
+                    row["flash_evaluations"] = [{
+                        "period": "24 Saat",
+                        "start": None,
+                        "end": None,
+                        "price": case["price"],
+                        "eligible": True,
+                        "source": "Senin Belirlediğin Flaş Fiyatı",
+                    }]
 
                 response, output_dir = self.apply_from_temp(
                     root,
@@ -328,6 +396,7 @@ class ApplyExportTests(unittest.TestCase):
                 "Uygulanabilir Kampanyalar": "Flaş",
                 "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
                 "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 950.25,
                 "flash_evaluations": [{
                     "period": "24 Saat",
                     "start": None,
@@ -394,6 +463,7 @@ class ApplyExportTests(unittest.TestCase):
                 "Uygulanabilir Kampanyalar": "Flaş",
                 "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
                 "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 950.25,
                 "flash_evaluations": [{
                     "period": "24 Saat",
                     "start": None,
@@ -456,10 +526,11 @@ class ApplyExportTests(unittest.TestCase):
                         "LEGACY": {"main": "Flaş", "extra": "Hiçbiri"}
                     },
                 },
+                current_schema=False,
             )
 
             self.assertEqual(response.status_code, 400, response.get_json())
-            self.assertIn("yeniden hesaplayın", response.get_json()["message"])
+            self.assertIn("hesaplama", response.get_json()["message"].casefold())
 
     def test_flash_export_separates_24_and_3_hour_intervals_on_same_date(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -494,6 +565,7 @@ class ApplyExportTests(unittest.TestCase):
                 "Uygulanabilir Kampanyalar": "Flaş",
                 "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
                 "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 900,
                 "flash_evaluations": [
                     {
                         "period": "24 Saat",
@@ -567,6 +639,7 @@ class ApplyExportTests(unittest.TestCase):
                 "Uygulanabilir Kampanyalar": "Flaş",
                 "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
                 "eligible_extra_campaigns": ["Hiçbiri"],
+                "Flaş Ürün 24 Saat Fiyatı (TL)": 925,
                 "flash_evaluations": [{
                     "period": "3 Saat",
                     "start": None,
@@ -772,8 +845,9 @@ class ApplyExportTests(unittest.TestCase):
                     "eligible_main_campaigns": ["Hiçbiri", "Plus"],
                     "eligible_extra_campaigns": ["Hiçbiri"],
                 }
-                if result_price is not None:
-                    row["Plus Fiyatı (TL)"] = result_price
+                row["Plus Fiyatı (TL)"] = (
+                    result_price if result_price is not None else 90
+                )
 
                 response, output_dir = self.apply_from_temp(
                     root,
@@ -1012,6 +1086,19 @@ class ApplyExportTests(unittest.TestCase):
                 "Uygulanabilir Kampanyalar": label,
                 "eligible_main_campaigns": ["Hiçbiri"],
                 "eligible_extra_campaigns": ["Hiçbiri", label],
+                "counter_evaluations": {
+                    label: {
+                        "price": 400,
+                        "customer_price": 300,
+                        "rate": 10,
+                        "net": 320,
+                        "seller_disc": 40,
+                        "min_price": 300,
+                        "disc_type": "%",
+                        "disc_val": 25,
+                        "trendyol_percent": 60,
+                    }
+                },
             }
 
             response, _output_dir = self.apply_from_temp(
@@ -1031,6 +1118,44 @@ class ApplyExportTests(unittest.TestCase):
                 if "Kupon" in name
             )
             self.assertIn("_%25_Kupon_", coupon_name)
+
+    def test_apply_rejects_extra_below_selected_main_minimum_price(self):
+        label = "Karşılamalı 50 TL"
+        row = {
+            "Barkod": "A1",
+            "Stok Adedi": 1,
+            "eligible_main_campaigns": ["Hiçbiri", "Flaş"],
+            "eligible_extra_campaigns": ["Hiçbiri", label],
+            "Güncel Ürün Fiyatı (TL)": 1500,
+            "Güncel Ürün Komisyon (%)": 10,
+            "Flaş Ürün 24 Saat Fiyatı (TL)": 999.99,
+            "Flaş Ürün Komisyon (%)": 10,
+            "campaign_floor_prices": {"Flaş": 800},
+            "counter_evaluations": {
+                label: {
+                    "price": 1200,
+                    "min_price": 1000,
+                    "disc_type": "TL",
+                    "disc_val": 50,
+                    "trendyol_percent": 0,
+                }
+            },
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            response, output_dir = self.apply_from_temp(
+                Path(temp_dir),
+                [row],
+                {},
+                {
+                    "target_type": "Hepsi",
+                    "selections": {
+                        "A1": {"main": "Flaş", "extra": label}
+                    },
+                },
+            )
+
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(output_dir.iterdir()), [])
 
     def test_selection_payload_and_number_validation_fail_closed(self):
         self.assertFalse(
