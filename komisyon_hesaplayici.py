@@ -3,6 +3,12 @@ import math
 import pandas as pd
 from pathlib import Path
 
+from input_files import (
+    build_campaign_label,
+    normalize_campaign_config,
+    normalize_recommendation_rule,
+)
+
 ROUNDING_EPSILON = 1e-9
 
 CAMPAIGN_LABELS = {
@@ -83,20 +89,29 @@ ALLOWED_FOR_RECOMMENDATION = {'Avantajlı', 'Flaş', 'Plus'}
 MAIN_CAMPAIGN_KEYS = {'Avantajlı', 'Flaş', 'Plus'}
 
 
-def choose_campaigns_smart(current_net, candidates):
+def choose_campaigns_smart(current_net, candidates, recommendation_rule=None):
     """
     candidates: (campaign_key, net_price, eff_price, rate, used_current_price=False, is_muhasebe=False)
     
-    Ana ve ekstra kampanyaları ayrı ayrı en yüksek kalan nete göre seçer.
-    Net eşitse yüksek fiyat, o da eşitse kampanya adı belirleyicidir.
+    Ana kampanyayı etkin kural sırasına, aksi halde kalan nete göre seçer.
+    Ekstra kampanya her zaman en yüksek kalan nete göre seçilir.
     """
+    rule = normalize_recommendation_rule(recommendation_rule)
     selectable = selectable_campaigns(current_net, candidates)
     if not selectable:
         return 'Hiçbiri', 'Hiçbiri', '', 'Hiçbiri', 'Hiçbiri'
 
     main_selectable = [c for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
     if main_selectable:
-        best_main = min(main_selectable, key=lambda x: (-x[1], -x[2], x[0]))[0]
+        if rule["enabled"]:
+            selectable_main_names = {candidate[0] for candidate in main_selectable}
+            best_main = next(
+                name for name in rule["priority"] if name in selectable_main_names
+            )
+        else:
+            best_main = min(
+                main_selectable, key=lambda x: (-x[1], -x[2], x[0])
+            )[0]
     else:
         best_main = 'Hiçbiri'
 
@@ -108,7 +123,7 @@ def choose_campaigns_smart(current_net, candidates):
 
     applicable = []
     for c in selectable:
-        group = 'Plus Ek İndirim' if c[0].startswith('Plus Ek İndirim %') else c[0]
+        group = 'Plus Ek İndirim' if c[0].startswith('Plus Ek İndirim') else c[0]
         if group not in applicable:
             applicable.append(group)
 
@@ -151,7 +166,36 @@ def build_discount_fields(is_eligible, current_price, dip_price, market_price):
     }
 
 
-def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None):
+def build_extra_evaluation(base_price, commission_rate, config):
+    price = to_float(base_price)
+    rate = to_float(commission_rate)
+    if price is None or rate is None:
+        return None
+    discount_value = config["discount_amount"]
+    total_discount = (
+        round(price * (discount_value / 100.0), 2)
+        if config["discount_type"] == "%"
+        else discount_value
+    )
+    customer_price = round(price - total_discount, 2)
+    seller_discount = round(
+        total_discount * (1.0 - (config["trendyol_percent"] / 100.0)), 2
+    )
+    return {
+        "customer_price": customer_price,
+        "price": price,
+        "rate": rate,
+        "net": round(price - (price * (rate / 100.0)) - seller_discount, 2),
+        "seller_disc": seller_discount,
+        "min_price": config["min_price"],
+        "disc_type": config["discount_type"],
+        "disc_val": discount_value,
+        "trendyol_percent": config["trendyol_percent"],
+    }
+
+
+def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None, recommendation_rule=None):
+    recommendation_rule = normalize_recommendation_rule(recommendation_rule)
     required = ('discount', 'commission', 'current')
     missing = [key for key in required if not input_files.get(key)]
     if missing:
@@ -164,26 +208,23 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     # Parse multi-counter files configuration if provided
     counter_items = []
     if counter_files and isinstance(counter_files, list):
-        for idx, item in enumerate(counter_files):
+        for idx, raw_item in enumerate(counter_files):
+            item = normalize_campaign_config(raw_item, "counter")
             if item.get('enabled', True) is False:
                 continue
             try:
-                c_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
+                item_path = item.get('path') or item.get('stored_path')
+                c_df = pd.read_excel(item_path) if isinstance(item_path, (str, Path)) else item.get('df', pd.DataFrame())
                 if not c_df.empty and 'Barkod' in c_df.columns:
-                    c_df['BARKOD_CLN'] = c_df['Barkod'].astype(str).str.strip()
+                    c_df = c_df.assign(BARKOD_CLN=c_df['Barkod'].astype(str).str.strip())
                     item_dict = c_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
-                    
-                    min_p = float(item.get('min_price', 0))
-                    disc_amt = float(item.get('discount_amount', 0))
-                    tr_pct = float(item.get('trendyol_percent', 0))
-                    label = item.get('label') or f"Karşılamalı ({int(min_p) if min_p.is_integer() else min_p} TL Üzeri / {int(disc_amt) if disc_amt.is_integer() else disc_amt} TL İndirim)"
-                    
                     counter_items.append({
                         'id': item.get('id') or f"counter_{idx+1}",
-                        'label': label,
-                        'min_price': min_p,
-                        'discount_amount': disc_amt,
-                        'trendyol_percent': tr_pct,
+                        'label': build_campaign_label(item, "counter", idx),
+                        'min_price': item['min_price'],
+                        'discount_amount': item['discount_amount'],
+                        'discount_type': item['discount_type'],
+                        'trendyol_percent': item['trendyol_percent'],
                         'dict': item_dict
                     })
             except Exception: pass
@@ -200,6 +241,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     'label': 'Karşılamalı Kampanya',
                     'min_price': 0.0,
                     'discount_amount': toplam_ind,
+                    'discount_type': 'TL',
                     'trendyol_percent': tr_oran,
                     'dict': item_dict
                 })
@@ -208,20 +250,23 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     # Parse multi plus_extra files configuration if provided
     plus_extra_items = []
     if plus_extra_files and isinstance(plus_extra_files, list):
-        for idx, item in enumerate(plus_extra_files):
+        for idx, raw_item in enumerate(plus_extra_files):
+            item = normalize_campaign_config(raw_item, "plus_extra")
             if item.get('enabled', True) is False:
                 continue
             try:
-                pe_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
+                item_path = item.get('path') or item.get('stored_path')
+                pe_df = pd.read_excel(item_path) if isinstance(item_path, (str, Path)) else item.get('df', pd.DataFrame())
                 if not pe_df.empty and 'Barkod' in pe_df.columns:
-                    pe_df['BARKOD_CLN'] = pe_df['Barkod'].astype(str).str.strip()
+                    pe_df = pe_df.assign(BARKOD_CLN=pe_df['Barkod'].astype(str).str.strip())
                     item_dict = pe_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
-                    rate = float(item.get('rate', 0))
-                    label = item.get('label') or (f"Plus Ek İndirim %{int(rate) if rate.is_integer() else rate}" if rate > 0 else f"Plus Ek İndirim #{idx+1}")
                     plus_extra_items.append({
                         'id': item.get('id') or f"plus_extra_{idx+1}",
-                        'label': label,
-                        'rate': rate,
+                        'label': build_campaign_label(item, "plus_extra", idx),
+                        'min_price': item['min_price'],
+                        'discount_amount': item['discount_amount'],
+                        'discount_type': item['discount_type'],
+                        'trendyol_percent': item['trendyol_percent'],
                         'dict': item_dict
                     })
             except Exception: pass
@@ -232,10 +277,14 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 pe_df['BARKOD_CLN'] = pe_df['Barkod'].astype(str).str.strip()
                 item_dict = pe_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
                 for rate in [5.0, 10.0, 20.0]:
+                    config = normalize_campaign_config({'rate': rate}, "plus_extra")
                     plus_extra_items.append({
                         'id': f"plus_extra_{int(rate)}",
-                        'label': f"Plus Ek İndirim %{int(rate)}",
-                        'rate': rate,
+                        'label': build_campaign_label(config, "plus_extra"),
+                        'min_price': config['min_price'],
+                        'discount_amount': config['discount_amount'],
+                        'discount_type': config['discount_type'],
+                        'trendyol_percent': config['trendyol_percent'],
                         'dict': item_dict
                     })
         except Exception: pass
@@ -243,28 +292,23 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     # Parse multi coupon files configuration if provided
     coupon_items = []
     if coupon_files and isinstance(coupon_files, list):
-        for idx, item in enumerate(coupon_files):
+        for idx, raw_item in enumerate(coupon_files):
+            item = normalize_campaign_config(raw_item, "coupon")
             if item.get('enabled', True) is False:
                 continue
             try:
-                cp_df = pd.read_excel(item['path']) if isinstance(item.get('path'), (str, Path)) else item.get('df', pd.DataFrame())
+                item_path = item.get('path') or item.get('stored_path')
+                cp_df = pd.read_excel(item_path) if isinstance(item_path, (str, Path)) else item.get('df', pd.DataFrame())
                 if not cp_df.empty and 'Barkod' in cp_df.columns:
-                    cp_df['BARKOD_CLN'] = cp_df['Barkod'].astype(str).str.strip()
+                    cp_df = cp_df.assign(BARKOD_CLN=cp_df['Barkod'].astype(str).str.strip())
                     item_dict = cp_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
-                    
-                    min_p = float(item.get('min_price', 0))
-                    disc_amt = float(item.get('discount_amount', 0))
-                    tr_pct = float(item.get('trendyol_percent', 0))
-                    min_p_str = f"{int(min_p)}" if min_p.is_integer() else f"{min_p}"
-                    disc_str = f"{int(disc_amt)}" if disc_amt.is_integer() else f"{disc_amt}"
-                    label = item.get('label') or f"{min_p_str} TL Üzerine {disc_str} TL Kupon - Trendyol Plus Müşterilerine Özel"
-                    
                     coupon_items.append({
                         'id': item.get('id') or f"coupon_{idx+1}",
-                        'label': label,
-                        'min_price': min_p,
-                        'discount_amount': disc_amt,
-                        'trendyol_percent': tr_pct,
+                        'label': build_campaign_label(item, "coupon", idx),
+                        'min_price': item['min_price'],
+                        'discount_amount': item['discount_amount'],
+                        'discount_type': item['discount_type'],
+                        'trendyol_percent': item['trendyol_percent'],
                         'dict': item_dict
                     })
             except Exception: pass
@@ -558,6 +602,9 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
 
 
+        counter_evaluations = {}
+        qualified_extra_labels = set()
+
         # 4. Plus Ek İndirim Kampanyaları (Çoklu Yükleme Desteği)
         if plus_extra_items:
             for pe_item in plus_extra_items:
@@ -574,18 +621,31 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         pe_price = guncel_fiyat_calc
                         pe_price_is_fallback = True
                     
-                    if pe_price and pe_price > 0:
+                    if pe_price and pe_price >= pe_item['min_price'] - 0.01:
                         pe_rate = get_commission_rate(pe_price, kom_row) if kom_row else None
                         if pe_rate is None and gun_row:
                             try: pe_rate = to_float(gun_row['Komisyon Oranı'])
                             except: pass
-                        if pe_rate is not None:
-                            disc_ratio = (1.0 - (pe_item['rate'] / 100.0)) if pe_item['rate'] > 0 else 1.0
-                            calc_pe_price = round(pe_price * disc_ratio, 2)
-                            pe_net = round(calc_pe_price - (pe_price * (pe_rate / 100.0)), 2)
-                            if common_threshold is None or calc_pe_price >= common_threshold - 0.01:
-                                eligible_campaigns.append(pe_item['label'])
-                                smart_candidates.append((pe_item['label'], pe_net, calc_pe_price, pe_rate, pe_price_is_fallback))
+                        evaluation = build_extra_evaluation(pe_price, pe_rate, pe_item)
+                        if (
+                            evaluation
+                            and evaluation['customer_price'] >= 0
+                            and (
+                                common_threshold is None
+                                or evaluation['customer_price'] >= common_threshold - 0.01
+                            )
+                        ):
+                            label = pe_item['label']
+                            qualified_extra_labels.add(label)
+                            counter_evaluations[label] = evaluation
+                            eligible_campaigns.append(label)
+                            smart_candidates.append((
+                                label,
+                                evaluation['net'],
+                                evaluation['customer_price'],
+                                evaluation['rate'],
+                                pe_price_is_fallback,
+                            ))
 
         # 4. Plus Ek İndirim (%5, %10, %20)
         plus_ek_fiyat = None
@@ -629,8 +689,6 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                             smart_candidates.append(candidate)
 
         # 5. Karşılamalı Kampanyalar (Çoklu)
-        counter_evaluations = {}
-        minimum_qualified_labels = set()
         for c_item in counter_items:
             c_dict = c_item['dict']
             c_row = c_dict.get(b)
@@ -646,33 +704,30 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     c_price_is_fallback = True
                 
                 if c_price and c_price >= c_item['min_price'] - 0.01:
-                    minimum_qualified_labels.add(c_item['label'])
-                    eligible_campaigns.append(c_item['label'])
-                    if common_threshold is None or c_price >= common_threshold - 0.01:
-                        c_rate = get_commission_rate(c_price, kom_row) if kom_row else None
-                        if c_rate is None and gun_row:
-                            try: c_rate = to_float(gun_row['Komisyon Oranı'])
-                            except: pass
-                        if c_rate is not None:
-                            disc_type = c_item.get('discount_type') or c_item.get('discount_unit') or 'TL'
-                            disc_val = c_item.get('discount_amount', 0.0)
-                            if disc_type == '%':
-                                total_discount = round(c_price * (disc_val / 100.0), 2)
-                            else:
-                                total_discount = disc_val
-                            
-                            seller_disc = round(total_discount * (1.0 - (c_item['trendyol_percent'] / 100.0)), 2)
-                            c_net = round(c_price - (c_price * (c_rate / 100.0)) - seller_disc, 2)
-                            counter_evaluations[c_item['label']] = {
-                                'price': c_price,
-                                'rate': c_rate,
-                                'net': c_net,
-                                'seller_disc': seller_disc,
-                                'disc_type': disc_type,
-                                'disc_val': disc_val,
-                                'trendyol_percent': c_item.get('trendyol_percent', 0.0),
-                            }
-                            smart_candidates.append((c_item['label'], c_net, c_price, c_rate, c_price_is_fallback))
+                    c_rate = get_commission_rate(c_price, kom_row) if kom_row else None
+                    if c_rate is None and gun_row:
+                        try: c_rate = to_float(gun_row['Komisyon Oranı'])
+                        except: pass
+                    evaluation = build_extra_evaluation(c_price, c_rate, c_item)
+                    if (
+                        evaluation
+                        and evaluation['customer_price'] >= 0
+                        and (
+                            common_threshold is None
+                            or evaluation['customer_price'] >= common_threshold - 0.01
+                        )
+                    ):
+                        label = c_item['label']
+                        qualified_extra_labels.add(label)
+                        counter_evaluations[label] = evaluation
+                        eligible_campaigns.append(label)
+                        smart_candidates.append((
+                            label,
+                            evaluation['net'],
+                            evaluation['customer_price'],
+                            evaluation['rate'],
+                            c_price_is_fallback,
+                        ))
 
         if coupon_items:
             for cp_item in coupon_items:
@@ -690,29 +745,30 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         cp_price_is_fallback = True
                     
                     if cp_price and cp_price >= cp_item['min_price'] - 0.01:
-                        minimum_qualified_labels.add(cp_item['label'])
-                        eligible_campaigns.append(cp_item['label'])
-                        if common_threshold is None or cp_price >= common_threshold - 0.01:
-                            cp_rate = get_commission_rate(cp_price, kom_row) if kom_row else None
-                            if cp_rate is None and gun_row:
-                                try: cp_rate = to_float(gun_row['Komisyon Oranı'])
-                                except: pass
-                            if cp_rate is not None:
-                                disc_type = 'TL'
-                                disc_val = cp_item.get('discount_amount', 0.0)
-                                total_discount = disc_val
-                                seller_disc = round(total_discount * (1.0 - (cp_item['trendyol_percent'] / 100.0)), 2)
-                                cp_net = round(cp_price - (cp_price * (cp_rate / 100.0)) - seller_disc, 2)
-                                counter_evaluations[cp_item['label']] = {
-                                    'price': cp_price,
-                                    'rate': cp_rate,
-                                    'net': cp_net,
-                                    'seller_disc': seller_disc,
-                                    'disc_type': disc_type,
-                                    'disc_val': disc_val,
-                                    'trendyol_percent': cp_item.get('trendyol_percent', 0.0),
-                                }
-                                smart_candidates.append((cp_item['label'], cp_net, cp_price, cp_rate, cp_price_is_fallback))
+                        cp_rate = get_commission_rate(cp_price, kom_row) if kom_row else None
+                        if cp_rate is None and gun_row:
+                            try: cp_rate = to_float(gun_row['Komisyon Oranı'])
+                            except: pass
+                        evaluation = build_extra_evaluation(cp_price, cp_rate, cp_item)
+                        if (
+                            evaluation
+                            and evaluation['customer_price'] >= 0
+                            and (
+                                common_threshold is None
+                                or evaluation['customer_price'] >= common_threshold - 0.01
+                            )
+                        ):
+                            label = cp_item['label']
+                            qualified_extra_labels.add(label)
+                            counter_evaluations[label] = evaluation
+                            eligible_campaigns.append(label)
+                            smart_candidates.append((
+                                label,
+                                evaluation['net'],
+                                evaluation['customer_price'],
+                                evaluation['rate'],
+                                cp_price_is_fallback,
+                            ))
 
         selectable = selectable_campaigns(net_1, smart_candidates)
 
@@ -748,16 +804,16 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     all_matching_extra_campaigns.append(c_name)
         if plus_extra_items:
             for pe_item in plus_extra_items:
-                if pe_item['dict'].get(b) is not None:
+                if pe_item['label'] in qualified_extra_labels:
                     if pe_item['label'] not in all_matching_extra_campaigns:
                         all_matching_extra_campaigns.append(pe_item['label'])
         if coupon_items:
             for cp_item in coupon_items:
-                if cp_item['dict'].get(b) is not None and cp_item['label'] in minimum_qualified_labels:
+                if cp_item['label'] in qualified_extra_labels:
                     if cp_item['label'] not in all_matching_extra_campaigns:
                         all_matching_extra_campaigns.append(cp_item['label'])
         for c_item in counter_items:
-            if c_item['dict'].get(b) is not None and c_item['label'] in minimum_qualified_labels:
+            if c_item['label'] in qualified_extra_labels:
                 if c_item['label'] not in all_matching_extra_campaigns:
                     all_matching_extra_campaigns.append(c_item['label'])
 
@@ -773,7 +829,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             if c_name not in eligible_campaigns:
                 eligible_campaigns.append(c_name)
 
-        rec_res = choose_campaigns_smart(net_1, selectable)
+        rec_res = choose_campaigns_smart(net_1, selectable, recommendation_rule)
         if len(rec_res) == 5:
             _rec_kampanya, _rec_kampanya_display, uygulanabilir_kampanyalar, _rec_extra, _rec_extra_display = rec_res
         else:

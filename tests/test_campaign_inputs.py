@@ -162,6 +162,10 @@ class CampaignInputTests(unittest.TestCase):
     def test_optional_campaigns_drive_initial_selection_and_best_net_override(self):
         from komisyon_hesaplayici import choose_campaigns_smart
 
+        highest_net_rule = {
+            "enabled": False,
+            "priority": ["Avantajlı", "Flaş", "Plus"],
+        }
         candidates = [
             ("Avantajlı", 92, 100, 8),
             ("Flaş", 105, 120, 12.5),
@@ -169,7 +173,7 @@ class CampaignInputTests(unittest.TestCase):
             ("Plus Ek İndirim %5", 103, 108, 4.6),
             ("Karşılamalı Kampanya", 104, 115, 9.5),
         ]
-        res = choose_campaigns_smart(100, candidates)
+        res = choose_campaigns_smart(100, candidates, highest_net_rule)
         initial, recommended, applicable = res[0], res[1], res[2]
 
         self.assertEqual(initial, "Flaş")
@@ -180,7 +184,7 @@ class CampaignInputTests(unittest.TestCase):
             "Avantajlı, Flaş, Plus, Plus Ek İndirim, Karşılamalı Kampanya",
         )
 
-        res = choose_campaigns_smart(110, candidates)
+        res = choose_campaigns_smart(110, candidates, highest_net_rule)
         initial, recommended, applicable = res[0], res[1], res[2]
 
         self.assertEqual((initial, recommended), ("Flaş", "Flaş Ürün"))
@@ -193,8 +197,10 @@ class CampaignInputTests(unittest.TestCase):
             ("Ekstra A", 103, 105, 2),
             ("Ekstra B", 103, 110, 2),
         ]
-        first = choose_campaigns_smart(100, tied_candidates)
-        reversed_order = choose_campaigns_smart(100, list(reversed(tied_candidates)))
+        first = choose_campaigns_smart(100, tied_candidates, highest_net_rule)
+        reversed_order = choose_campaigns_smart(
+            100, list(reversed(tied_candidates)), highest_net_rule
+        )
         self.assertEqual(first[0], "Avantajlı")
         self.assertEqual(first[3], "Ekstra B")
         self.assertEqual((first[0], first[3]), (reversed_order[0], reversed_order[3]))
@@ -202,6 +208,7 @@ class CampaignInputTests(unittest.TestCase):
         res = choose_campaigns_smart(
             110,
             [("Plus", 105, 100, 5, True)],
+            highest_net_rule,
         )
         initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))
@@ -209,6 +216,7 @@ class CampaignInputTests(unittest.TestCase):
         res = choose_campaigns_smart(
             110,
             [("Plus", 115, 100, 5, True)],
+            highest_net_rule,
         )
         initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Plus", "Plus Ürün", "Plus"))
@@ -216,6 +224,7 @@ class CampaignInputTests(unittest.TestCase):
         res = choose_campaigns_smart(
             None,
             [("Plus", 115, 100, 5, True)],
+            highest_net_rule,
         )
         initial, recommended, applicable = res[0], res[1], res[2]
         self.assertEqual((initial, recommended, applicable), ("Hiçbiri", "Hiçbiri", ""))

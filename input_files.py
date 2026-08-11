@@ -1,6 +1,8 @@
 import json
+import math
 import os
 import tempfile
+import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -100,9 +102,178 @@ MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 150 * 1024 * 1024
 MAX_ZIP_ENTRIES = 5000
 
+# ponytail: This app has one manifest and one process; use an inter-process lock
+# if it is ever deployed with multiple worker processes.
+_MANIFEST_WRITE_LOCK = threading.Lock()
+
 
 class InputValidationError(ValueError):
     pass
+
+
+MAIN_CAMPAIGN_PRIORITY = ("Avantajlı", "Flaş", "Plus")
+
+
+def normalize_recommendation_rule(rule=None):
+    if rule is None:
+        return {"enabled": True, "priority": list(MAIN_CAMPAIGN_PRIORITY)}
+    if not isinstance(rule, dict) or set(rule) != {"enabled", "priority"}:
+        raise InputValidationError("Öneri kuralı enabled ve priority alanlarını içermelidir.")
+    if not isinstance(rule["enabled"], bool):
+        raise InputValidationError("Öneri kuralı enabled alanı doğru/yanlış olmalıdır.")
+    priority = rule["priority"]
+    if (
+        not isinstance(priority, list)
+        or len(priority) != len(MAIN_CAMPAIGN_PRIORITY)
+        or any(not isinstance(name, str) for name in priority)
+        or len(set(priority)) != len(MAIN_CAMPAIGN_PRIORITY)
+        or set(priority) != set(MAIN_CAMPAIGN_PRIORITY)
+    ):
+        raise InputValidationError(
+            "Öneri önceliği Avantajlı, Flaş ve Plus kampanyalarını birer kez içermelidir."
+        )
+    return {"enabled": rule["enabled"], "priority": list(priority)}
+
+
+CAMPAIGN_NAMES = {
+    "counter": "Karşılamalı Kampanya",
+    "plus_extra": "Plus Ek İndirim",
+    "coupon": "Kupon",
+}
+
+
+def _campaign_number(value, field, campaign_name):
+    if value is None or value == "":
+        return 0.0
+    if isinstance(value, bool):
+        raise InputValidationError(f"{campaign_name} {field} sonlu bir sayı olmalıdır.")
+    try:
+        number = float(str(value).strip().replace(",", "."))
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(
+            f"{campaign_name} {field} sonlu bir sayı olmalıdır."
+        ) from exc
+    if not math.isfinite(number):
+        raise InputValidationError(f"{campaign_name} {field} sonlu bir sayı olmalıdır.")
+    return number
+
+
+def normalize_campaign_config(config, campaign_type):
+    campaign_name = CAMPAIGN_NAMES.get(campaign_type)
+    if campaign_name is None or not isinstance(config, dict):
+        raise InputValidationError("Kampanya yapılandırması geçersiz.")
+
+    legacy_plus = (
+        campaign_type == "plus_extra"
+        and "discount_amount" not in config
+        and "rate" in config
+    )
+    discount_type = config.get("discount_type") or config.get("discount_unit")
+    if discount_type is None:
+        discount_type = "%" if campaign_type == "plus_extra" else "TL"
+    discount_type = str(discount_type).strip()
+    if discount_type not in {"TL", "%"}:
+        raise InputValidationError(
+            f"{campaign_name} indirim tipi yalnızca TL veya % olabilir."
+        )
+
+    min_price = _campaign_number(config.get("min_price", 0), "alt limiti", campaign_name)
+    discount_amount = _campaign_number(
+        config.get("rate", 0) if legacy_plus else config.get("discount_amount", 0),
+        "indirim tutarı",
+        campaign_name,
+    )
+    trendyol_percent = _campaign_number(
+        config.get("trendyol_percent", 0), "Trendyol katkı oranı", campaign_name
+    )
+    if min_price < 0:
+        raise InputValidationError(f"{campaign_name} alt limiti negatif olamaz.")
+    if discount_amount < 0:
+        raise InputValidationError(f"{campaign_name} indirim tutarı negatif olamaz.")
+    if not 0 <= trendyol_percent <= 100:
+        raise InputValidationError(
+            f"{campaign_name} Trendyol katkı oranı 0 ile 100 arasında olmalıdır."
+        )
+    if discount_type == "%" and discount_amount > 100:
+        raise InputValidationError(
+            f"{campaign_name} yüzde indirimi 100'ü aşamaz."
+        )
+
+    normalized = {
+        **config,
+        "min_price": min_price,
+        "discount_amount": discount_amount,
+        "discount_type": discount_type,
+        "trendyol_percent": trendyol_percent,
+    }
+    if campaign_type == "plus_extra" and discount_type == "%":
+        normalized["rate"] = discount_amount
+    return normalized
+
+
+def normalize_campaign_configs(configs, campaign_type):
+    if not isinstance(configs, list):
+        raise InputValidationError("Kampanya yapılandırmaları liste olmalıdır.")
+    return [normalize_campaign_config(config, campaign_type) for config in configs]
+
+
+def _format_campaign_number(value):
+    number = float(value)
+    return str(int(number)) if number.is_integer() else str(number)
+
+
+def build_campaign_label(config, campaign_type, index=0):
+    config = normalize_campaign_config(config, campaign_type)
+    explicit_label = config.get("label")
+    if isinstance(explicit_label, str) and explicit_label.strip():
+        return explicit_label.strip()
+
+    min_price = _format_campaign_number(config["min_price"])
+    discount = _format_campaign_number(config["discount_amount"])
+    trendyol = _format_campaign_number(config["trendyol_percent"])
+    discount_part = (
+        f"%{discount} İndirim"
+        if config["discount_type"] == "%"
+        else f"{discount} TL İndirim"
+    )
+    trendyol_part = f"%{trendyol} Trendyol Karşılamalı"
+
+    if campaign_type == "plus_extra":
+        if (
+            config["discount_type"] == "%"
+            and config["min_price"] == 0
+            and config["trendyol_percent"] == 0
+        ):
+            return f"Plus Ek İndirim %{discount}"
+        return (
+            f"Plus Ek İndirim ({min_price} TL Üzeri / {discount_part} / "
+            f"{trendyol_part})"
+        )
+
+    if campaign_type == "counter":
+        if (
+            config["min_price"] == 0
+            and config["discount_amount"] == 0
+            and config["trendyol_percent"] == 0
+        ):
+            return f"Karşılamalı #{index + 1}"
+        parts = [f"{min_price} TL Üzeri", discount_part]
+        if config["trendyol_percent"]:
+            parts.append(trendyol_part)
+        return f"Karşılamalı ({' / '.join(parts)})"
+
+    coupon_discount = (
+        f"%{discount}" if config["discount_type"] == "%" else f"{discount} TL"
+    )
+    label = (
+        f"{min_price} TL Üzerine {coupon_discount} Kupon - "
+        "Trendyol Plus Müşterilerine Özel"
+    )
+    return (
+        f"{label} (%{trendyol} Trendyol Karşılamalı)"
+        if config["trendyol_percent"]
+        else label
+    )
 
 
 def _read_manifest(manifest_path, required=False):
@@ -118,6 +289,45 @@ def _read_manifest(manifest_path, required=False):
     if not isinstance(manifest, dict) or not isinstance(manifest.get("files"), dict):
         raise InputValidationError("Yüklenen girdi kaydı okunamadı.")
     return manifest
+
+
+def _write_manifest_atomic(manifest_path, manifest):
+    manifest_path = Path(manifest_path)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_manifest_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
+        ) as temp_manifest:
+            json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
+            temp_manifest_path = Path(temp_manifest.name)
+        os.replace(temp_manifest_path, manifest_path)
+    finally:
+        if temp_manifest_path and temp_manifest_path.exists():
+            temp_manifest_path.unlink()
+
+
+def _mutate_manifest_atomic(manifest_path, transform):
+    with _MANIFEST_WRITE_LOCK:
+        manifest = _read_manifest(manifest_path)
+        updated = transform(manifest)
+        if updated != manifest:
+            _write_manifest_atomic(manifest_path, updated)
+        return updated
+
+
+def load_recommendation_rule(manifest_path):
+    manifest = _read_manifest(manifest_path)
+    return normalize_recommendation_rule(manifest.get("recommendation_rule"))
+
+
+def save_recommendation_rule(manifest_path, rule):
+    normalized = normalize_recommendation_rule(rule)
+    _mutate_manifest_atomic(
+        manifest_path,
+        lambda manifest: {**manifest, "recommendation_rule": normalized},
+    )
+    return normalized
 
 
 def _valid_manifest_entries(upload_dir, manifest):
@@ -192,8 +402,6 @@ def save_upload_set(files, upload_dir, manifest_path):
         return {key: str(path) for key, (path, _item) in existing.items()}
 
     staged = {}
-    temp_manifest_path = None
-
     try:
         for key, upload in provided.items():
             if not str(upload.filename).lower().endswith(".xlsx"):
@@ -233,49 +441,135 @@ def save_upload_set(files, upload_dir, manifest_path):
             }
 
         # Mevcut manifest'teki diğer anahtarları (counter_configs, plus_extra_configs vb.) koru
-        existing_manifest = _read_manifest(manifest_path)
-        existing_manifest["files"] = manifest_files
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-        ) as temp_manifest:
-            json.dump(existing_manifest, temp_manifest, ensure_ascii=False, indent=2)
-            temp_manifest_path = Path(temp_manifest.name)
-        os.replace(temp_manifest_path, manifest_path)
+        _mutate_manifest_atomic(
+            manifest_path,
+            lambda manifest: {**manifest, "files": manifest_files},
+        )
         return saved
     finally:
         for temp_path in staged.values():
             if temp_path.exists():
                 temp_path.unlink()
-        if temp_manifest_path and temp_manifest_path.exists():
-            temp_manifest_path.unlink()
 
 
 import re
 
 def parse_counter_filename(filename):
+    return _parse_discount_filename(filename, "indirim")
+
+
+def _save_campaign_configs(manifest_path, key, campaign_type, configs):
+    normalized = normalize_campaign_configs(configs, campaign_type)
+    _mutate_manifest_atomic(
+        manifest_path,
+        lambda manifest: {**manifest, key: normalized},
+    )
+
+
+def _load_campaign_configs(manifest_path, key, campaign_type):
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    configs = manifest.get(key, [])
+    normalized_configs = normalize_campaign_configs(configs, campaign_type)
+    valid_configs = []
+    changed = normalized_configs != configs
+    for item in normalized_configs:
+        path = item.get("path") or item.get("stored_path")
+        if path and os.path.exists(path):
+            valid_configs.append(item)
+        else:
+            changed = True
+    if changed:
+        _save_campaign_configs(manifest_path, key, campaign_type, valid_configs)
+    return valid_configs
+
+
+def save_counter_configs(manifest_path, counter_configs):
+    _save_campaign_configs(
+        manifest_path, "counter_configs", "counter", counter_configs
+    )
+
+
+def load_counter_configs(manifest_path):
+    return _load_campaign_configs(manifest_path, "counter_configs", "counter")
+
+
+def parse_plus_extra_filename(filename):
+    return _parse_discount_filename(filename, "indirim", bare_percent=True)
+
+
+def save_plus_extra_configs(manifest_path, plus_extra_configs):
+    _save_campaign_configs(
+        manifest_path, "plus_extra_configs", "plus_extra", plus_extra_configs
+    )
+
+
+def load_plus_extra_configs(manifest_path):
+    return _load_campaign_configs(
+        manifest_path, "plus_extra_configs", "plus_extra"
+    )
+
+
+def parse_coupon_filename(filename):
+    return _parse_discount_filename(filename, "kupon")
+
+
+def _parse_discount_filename(filename, discount_word, bare_percent=False):
     fn_str = str(filename)
     min_p = 0.0
-    m_min = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?uzeri', fn_str, re.IGNORECASE)
+    number_value = r'\d+(?:[\.,]\d+)?'
+    number = rf'({number_value})'
+    separator = r'[\s_-]*'
+    m_min = re.search(
+        number + separator + r'tl' + separator + r'(?:uzeri(?:ne)?|üzeri(?:ne)?)',
+        fn_str,
+        re.IGNORECASE,
+    )
     if m_min:
         try: min_p = float(m_min.group(1).replace(',', '.'))
         except (ValueError, TypeError): pass
 
     disc = 0.0
     disc_type = 'TL'
-    m_disc_pct = re.search(r'%\s*(\d+(?:[\.,]\d+)?)\s*[-_]?indirim|(\d+(?:[\.,]\d+)?)\s*%\s*[-_]?indirim', fn_str, re.IGNORECASE)
+    m_disc_pct = re.search(
+        rf'(?:(?:%|y[uü]zde){separator}({number_value})|'
+        rf'({number_value}){separator}%)'
+        + separator
+        + rf'(?:ek{separator})?{discount_word}',
+        fn_str,
+        re.IGNORECASE,
+    )
     if m_disc_pct:
         disc_type = '%'
-        d_val = m_disc_pct.group(1) or m_disc_pct.group(2)
-        try: disc = float(d_val.replace(',', '.'))
+        raw_discount = m_disc_pct.group(1) or m_disc_pct.group(2)
+        try: disc = float(raw_discount.replace(',', '.'))
         except (ValueError, TypeError): pass
     else:
-        m_disc_tl = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl\s*[-_]?indirim', fn_str, re.IGNORECASE)
-        if m_disc_tl:
-            try: disc = float(m_disc_tl.group(1).replace(',', '.'))
+        m_disc_bare = re.search(
+            rf'ek{separator}({number_value}){separator}{discount_word}',
+            fn_str,
+            re.IGNORECASE,
+        ) if bare_percent else None
+        if m_disc_bare:
+            disc_type = '%'
+            try: disc = float(m_disc_bare.group(1).replace(',', '.'))
             except (ValueError, TypeError): pass
+        else:
+            m_disc_tl = re.search(
+                number + separator + r'tl' + separator + discount_word,
+                fn_str,
+                re.IGNORECASE,
+            )
+            if m_disc_tl:
+                try: disc = float(m_disc_tl.group(1).replace(',', '.'))
+                except (ValueError, TypeError): pass
 
     trendyol_p = 0.0
-    m_tr = re.search(r'%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_]?trendyol', fn_str, re.IGNORECASE)
+    m_tr = re.search(
+        r'%?' + separator + number + separator + r'%?' + separator + r'trendyol',
+        fn_str,
+        re.IGNORECASE,
+    )
     if m_tr:
         try: trendyol_p = float(m_tr.group(1).replace(',', '.'))
         except (ValueError, TypeError): pass
@@ -283,125 +577,12 @@ def parse_counter_filename(filename):
     return min_p, disc, trendyol_p, disc_type
 
 
-def save_counter_configs(manifest_path, counter_configs):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    manifest["counter_configs"] = counter_configs
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-    ) as temp_manifest:
-        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
-        temp_manifest_path = Path(temp_manifest.name)
-    os.replace(temp_manifest_path, manifest_path)
-
-
-def load_counter_configs(manifest_path):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    configs = manifest.get("counter_configs", [])
-    valid_configs = []
-    changed = False
-    for item in configs:
-        path = item.get("path") or item.get("stored_path")
-        if path and os.path.exists(path):
-            valid_configs.append(item)
-        else:
-            changed = True
-    if changed:
-        save_counter_configs(manifest_path, valid_configs)
-    return valid_configs
-
-
-def parse_plus_extra_filename(filename):
-    pattern = r'%?\s*(\d+)\s*%?'
-    m = re.search(pattern, str(filename))
-    if m:
-        try:
-            return float(m.group(1))
-        except (ValueError, TypeError):
-            pass
-    return 0.0
-
-
-def save_plus_extra_configs(manifest_path, plus_extra_configs):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    manifest["plus_extra_configs"] = plus_extra_configs
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-    ) as temp_manifest:
-        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
-        temp_manifest_path = Path(temp_manifest.name)
-    os.replace(temp_manifest_path, manifest_path)
-
-
-def load_plus_extra_configs(manifest_path):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    configs = manifest.get("plus_extra_configs", [])
-    valid_configs = []
-    changed = False
-    for item in configs:
-        path = item.get("path") or item.get("stored_path")
-        if path and os.path.exists(path):
-            valid_configs.append(item)
-        else:
-            changed = True
-    if changed:
-        save_plus_extra_configs(manifest_path, valid_configs)
-    return valid_configs
-
-
-def parse_coupon_filename(filename):
-    fn_str = str(filename)
-    min_p = 0.0
-    m_min = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?uzeri', fn_str, re.IGNORECASE)
-    if m_min:
-        try: min_p = float(m_min.group(1).replace(',', '.'))
-        except (ValueError, TypeError): pass
-
-    disc = 0.0
-    m_disc = re.search(r'(\d+(?:[\.,]\d+)?)\s*[-_]?tl[-_]?kupon', fn_str, re.IGNORECASE)
-    if m_disc:
-        try: disc = float(m_disc.group(1).replace(',', '.'))
-        except (ValueError, TypeError): pass
-
-    trendyol_p = 0.0
-    m_tr = re.search(r'%?\s*(\d+(?:[\.,]\d+)?)\s*%?\s*[-_]?trendyol', fn_str, re.IGNORECASE)
-    if m_tr:
-        try: trendyol_p = float(m_tr.group(1).replace(',', '.'))
-        except (ValueError, TypeError): pass
-
-    return min_p, disc, trendyol_p
-
-
 def save_coupon_configs(manifest_path, coupon_configs):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    manifest["coupon_configs"] = coupon_configs
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-    ) as temp_manifest:
-        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
-        temp_manifest_path = Path(temp_manifest.name)
-    os.replace(temp_manifest_path, manifest_path)
+    _save_campaign_configs(manifest_path, "coupon_configs", "coupon", coupon_configs)
 
 
 def load_coupon_configs(manifest_path):
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    configs = manifest.get("coupon_configs", [])
-    valid_configs = []
-    changed = False
-    for item in configs:
-        path = item.get("path") or item.get("stored_path")
-        if path and os.path.exists(path):
-            valid_configs.append(item)
-        else:
-            changed = True
-    if changed:
-        save_coupon_configs(manifest_path, valid_configs)
-    return valid_configs
+    return _load_campaign_configs(manifest_path, "coupon_configs", "coupon")
 
 
 def load_upload_set(upload_dir, manifest_path):
@@ -438,22 +619,20 @@ def load_upload_status(upload_dir, manifest_path):
 def save_single_file_expiries(manifest_path, expiries_dict):
     if not isinstance(expiries_dict, dict):
         return
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    files = manifest.get("files", {})
-    updated = False
-    for k, expiry in expiries_dict.items():
-        if k in files:
-            files[k]["expiry_date"] = str(expiry or "")
-            updated = True
-    if updated:
-        manifest["files"] = files
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-        ) as temp_manifest:
-            json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
-            temp_manifest_path = Path(temp_manifest.name)
-        os.replace(temp_manifest_path, manifest_path)
+
+    def update_expiries(manifest):
+        files = manifest.get("files", {})
+        updated_files = {
+            key: (
+                {**item, "expiry_date": str(expiries_dict[key] or "")}
+                if key in expiries_dict
+                else item
+            )
+            for key, item in files.items()
+        }
+        return {**manifest, "files": updated_files}
+
+    _mutate_manifest_atomic(manifest_path, update_expiries)
 
 
 def load_user_selections(manifest_path):
@@ -464,13 +643,9 @@ def load_user_selections(manifest_path):
 def save_user_selections(manifest_path, selections_dict):
     if not isinstance(selections_dict, dict):
         return
-    manifest_path = Path(manifest_path)
-    manifest = _read_manifest(manifest_path)
-    manifest["user_selections"] = selections_dict
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=manifest_path.parent, delete=False
-    ) as temp_manifest:
-        json.dump(manifest, temp_manifest, ensure_ascii=False, indent=2)
-        temp_manifest_path = Path(temp_manifest.name)
-    os.replace(temp_manifest_path, manifest_path)
+    selections = dict(selections_dict)
+    _mutate_manifest_atomic(
+        manifest_path,
+        lambda manifest: {**manifest, "user_selections": selections},
+    )
 

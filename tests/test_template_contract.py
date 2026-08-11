@@ -23,9 +23,10 @@ class TemplateContractTests(unittest.TestCase):
 
     def test_recommendation_button_applies_the_best_campaign_candidate(self):
         self.assertIn(
-            "const rec = row['Önerilen Kampanya'] || 'Hiçbiri';",
+            "const priorityRecommendation = recommendationRule.priority.find",
             self.template,
         )
+        self.assertIn("row['Önerilen Kampanya'] || 'Hiçbiri'", self.template)
         self.assertIn("let selectedCount = 0;", self.template)
         self.assertIn("ürüne önerilen", self.template)
 
@@ -123,6 +124,66 @@ class TemplateContractTests(unittest.TestCase):
         option = '<option value="${escapeHtml(cName)}" data-dynamic="true">'
         self.assertIn("selectExtra.append(`" + option, self.template)
         self.assertNotIn("select.append(`" + option, self.template)
+
+    def test_main_campaign_priority_rule_is_configurable_and_persistent(self):
+        self.assertIn('id="recommendation-rule-data" type="application/json"', self.template)
+        self.assertIn('id="recommendationRuleEnabled"', self.template)
+        self.assertIn('id="recommendationPriorityList"', self.template)
+        self.assertIn("const MAIN_CAMPAIGNS = Object.freeze(['Avantajlı', 'Flaş', 'Plus']);", self.template)
+        self.assertIn("new Set(priority).size === MAIN_CAMPAIGNS.length", self.template)
+        self.assertIn("fetch('/api/recommendation-rule'", self.template)
+        self.assertIn(
+            "formData.append('recommendation_rule_json', JSON.stringify(recommendationRule));",
+            self.template,
+        )
+
+    def test_manifest_writes_are_serialized_with_call_time_snapshots(self):
+        self.assertIn("let manifestWriteQueue = Promise.resolve();", self.template)
+        self.assertIn("const operation = manifestWriteQueue.then(write);", self.template)
+        self.assertIn(
+            "manifestWriteQueue = operation.catch(() => undefined);",
+            self.template,
+        )
+        self.assertEqual(
+            self.template.count("return enqueueManifestWrite(async () => {"),
+            2,
+        )
+        self.assertIn(
+            "const payload = JSON.stringify({ enabled: rule.enabled, priority: [...rule.priority] });",
+            self.template,
+        )
+        self.assertIn("const payload = JSON.stringify({ selections });", self.template)
+
+    def test_recommendation_rule_controls_auto_selection_without_changing_extra(self):
+        self.assertIn(
+            "recommendationRule.priority.find(campaign => eligible.includes(campaign))",
+            self.template,
+        )
+        self.assertIn(
+            "const rec = recommendationRule.enabled",
+            self.template,
+        )
+        self.assertIn(
+            "const recExtra = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';",
+            self.template,
+        )
+
+    def test_disabled_priority_rule_recomputes_highest_net_from_current_row(self):
+        self.assertIn("function bestEligibleMainCampaign(row)", self.template)
+        self.assertIn("'Avantajlı Ürün Kalan Net (TL)'", self.template)
+        self.assertIn("'Flaş Ürün Kalan Net (TL)'", self.template)
+        self.assertIn("'Plus Net (TL)'", self.template)
+        self.assertIn("candidate.net > best.net", self.template)
+        self.assertIn("candidate.price > best.price", self.template)
+        self.assertIn(
+            "return best?.campaign || row['Önerilen Kampanya'] || 'Hiçbiri';",
+            self.template,
+        )
+        self.assertIn(": bestEligibleMainCampaign(row);", self.template)
+
+    def test_dead_legacy_rule_editor_is_removed(self):
+        self.assertNotIn("function addRuleRow()", self.template)
+        self.assertNotIn("function changeRuleType(", self.template)
 
 
 if __name__ == "__main__":
