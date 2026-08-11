@@ -8,16 +8,6 @@ class TemplateContractTests(unittest.TestCase):
         cls.template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(
             encoding="utf-8"
         )
-import unittest
-from pathlib import Path
-
-
-class TemplateContractTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(
-            encoding="utf-8"
-        )
 
     def test_uploaded_file_status_is_visible_for_each_input(self):
         self.assertIn('id="upload_status_{{ key }}"', self.template)
@@ -51,12 +41,56 @@ class TemplateContractTests(unittest.TestCase):
             self.template,
         )
 
+    def test_theme_toggle_is_persistent_and_uses_daisyui(self):
+        self.assertIn('id="themeToggle"', self.template)
+        self.assertIn("class=\"theme-controller toggle toggle-sm toggle-primary\"", self.template)
+        self.assertIn("localStorage.setItem('theme', theme)", self.template)
+        self.assertIn("document.documentElement.dataset.theme", self.template)
+        self.assertIn("window.matchMedia('(prefers-color-scheme: dark)')", self.template)
+
+    def test_ui_accessibility_and_mobile_layout_contract(self):
+        self.assertIn('<meta name="description"', self.template)
+        self.assertIn('rel="icon" href="data:image/svg+xml,', self.template)
+        self.assertIn('role="status"', self.template)
+        self.assertIn('aria-live="polite"', self.template)
+        self.assertIn('aria-busy="true"', self.template)
+        self.assertIn('id="toastContainer" aria-live="polite"', self.template)
+        self.assertIn('<caption class="sr-only">', self.template)
+        self.assertIn('aria-label="Tüm ürünleri seç"', self.template)
+        self.assertIn('aria-label="Ürünü seç"', self.template)
+        self.assertIn('aria-label="Ana kampanya toplu seçimi"', self.template)
+        self.assertIn('aria-label="Ekstra kampanya toplu seçimi"', self.template)
+        self.assertIn('aria-label="{{ spec.label }} Excel dosyası"', self.template)
+        self.assertIn('aria-label="${escapeHtml(row.Barkod || \'Ürün\')} ana kampanya seçimi"', self.template)
+        self.assertIn('aria-label="Ürün veya barkod ara"', self.template)
+        self.assertIn('aria-label="Minimum fiyat"', self.template)
+        self.assertIn('aria-label="Maksimum fiyat"', self.template)
+        self.assertIn('[data-theme="dark"] .text-base-content\\/40', self.template)
+        self.assertIn('focus-visible:outline', self.template)
+        self.assertIn('max-w-[1800px] mx-auto', self.template)
+        self.assertIn('href="#excel-girdileri"', self.template)
+        self.assertIn('href="#kampanya-tablosu"', self.template)
+
+    def test_base_inputs_text_names_three_required_files(self):
+        self.assertIn("zorunludur. İndirim Uygulanabilecek Ürünler de zorunludur.", self.template)
+        self.assertIn("* Zorunlu 3 Girdi", self.template)
+
     def test_campaign_actions_have_one_implementation(self):
         self.assertEqual(self.template.count("function updateSelection("), 1)
         self.assertEqual(self.template.count("function applyBulkAction("), 1)
+        self.assertEqual(self.template.count("function autoSelect("), 1)
         self.assertIn(
             "const counter = row.counter_evaluations?.[extraSel];", self.template
         )
+        self.assertIn("main: row.userSelection || 'Hiçbiri'", self.template)
+        self.assertIn("extra: row.userExtraSelection || 'Hiçbiri'", self.template)
+
+    def test_dark_mode_uses_semantic_datatable_colors(self):
+        self.assertIn("--campaign-advantage-bg: color-mix", self.template)
+        self.assertIn("table.dataTable tbody tr:hover", self.template)
+        self.assertIn("var(--color-success)", self.template)
+        self.assertIn("var(--color-info)", self.template)
+        self.assertIn("var(--color-warning)", self.template)
 
 
 if __name__ == "__main__":

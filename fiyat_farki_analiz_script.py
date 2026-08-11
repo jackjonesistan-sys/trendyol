@@ -1,7 +1,5 @@
 import pandas as pd
-import numpy as np
 import os
-import glob
 
 def clean_price(val):
     if pd.isna(val) or str(val).strip() == '' or str(val).strip() == 'None':
@@ -13,18 +11,29 @@ def clean_price(val):
         elif ',' in s:
             s = s.replace(',', '.')
         return float(s)
-    except:
+    except (TypeError, ValueError):
         return None
 
-def generate_fiyat_farki_raporu(output_dir='Çıktılar'):
+def find_column(frame, *terms):
+    return next(
+        (
+            column
+            for column in frame.columns
+            if all(term in str(column).casefold() for term in terms)
+        ),
+        None,
+    )
+
+
+def generate_fiyat_farki_raporu(output_dir='Çıktılar', discount_path=None):
     print("Veriler Yükleniyor...")
-    input_dir = 'Girdiler'
-    
-    indirim_files = [f for f in os.listdir(input_dir) if 'ndirim' in f and f.endswith('.xlsx') and not f.startswith('~$')]
-    if not indirim_files:
-        print("İndirim Uygulanabilecek Ürünler dosyası Girdiler klasöründe bulunamadı.")
-        return
-    df_indirim = pd.read_excel(os.path.join(input_dir, indirim_files[0]), dtype=str)
+    canonical_discount = os.path.join('Girdiler', 'Yuklenen', 'discount.xlsx')
+    discount_path = discount_path or (canonical_discount if os.path.exists(canonical_discount) else None)
+    df_indirim = (
+        pd.read_excel(discount_path, dtype=str)
+        if discount_path and os.path.exists(discount_path)
+        else pd.DataFrame(columns=['BARKOD', 'Eski Fiyat', 'YENİ Fiyat'])
+    )
     
     uygulanmayan_path = os.path.join(output_dir, 'Uygulanmayan_Urunler_Raporu.xlsx')
     if not os.path.exists(uygulanmayan_path):
@@ -32,13 +41,15 @@ def generate_fiyat_farki_raporu(output_dir='Çıktılar'):
         return
     df_uygulanmayan = pd.read_excel(uygulanmayan_path, dtype=str)
     
-    ind_barkod_col = [c for c in df_indirim.columns if 'barkod' in c.lower()][0]
-    ind_eski_col = [c for c in df_indirim.columns if 'eski fiyat' in c.lower()][0]
-    ind_yeni_col = [c for c in df_indirim.columns if 'yen' in c.lower() and 'fiyat' in c.lower()][0]
-    
-    uyg_barkod_col = [c for c in df_uygulanmayan.columns if 'barkod' in c.lower()][0]
-    uyg_guncel_col = [c for c in df_uygulanmayan.columns if 'ncel' in c.lower() and 'fiyat' in c.lower()][0]
-    uyg_avan_col = [c for c in df_uygulanmayan.columns if 'avantajl' in c.lower() and 'fiyat' in c.lower()][0]
+    ind_barkod_col = find_column(df_indirim, 'barkod')
+    ind_eski_col = find_column(df_indirim, 'eski', 'fiyat')
+    ind_yeni_col = find_column(df_indirim, 'yen', 'fiyat')
+    uyg_barkod_col = find_column(df_uygulanmayan, 'barkod')
+    uyg_guncel_col = find_column(df_uygulanmayan, 'ncel', 'fiyat')
+    uyg_avan_col = find_column(df_uygulanmayan, 'avantajl', 'fiyat')
+    if not all((ind_barkod_col, ind_eski_col, ind_yeni_col, uyg_barkod_col, uyg_guncel_col)):
+        print("Fiyat farkı raporu için gerekli sütunlar bulunamadı.")
+        return
     
     df_indirim['BARKOD_CLN'] = df_indirim[ind_barkod_col].astype(str).str.strip()
     df_uygulanmayan['BARKOD_CLN'] = df_uygulanmayan[uyg_barkod_col].astype(str).str.strip()
@@ -63,7 +74,7 @@ def generate_fiyat_farki_raporu(output_dir='Çıktılar'):
             eski, yeni = indirim_dict[b]
         else:
             eski = clean_price(row.get(uyg_guncel_col))
-            yeni = clean_price(row.get(uyg_avan_col))
+            yeni = clean_price(row.get(uyg_avan_col)) if uyg_avan_col else None
             if yeni is None or pd.isna(yeni):
                 yeni = eski
                 

@@ -136,8 +136,9 @@ class CampaignInputTests(unittest.TestCase):
         res = choose_campaigns_smart(100, candidates)
         initial, recommended, applicable = res[0], res[1], res[2]
 
-        self.assertEqual(initial, "Avantajlı")
-        self.assertEqual(recommended, "Avantajlı Ürün")
+        self.assertEqual(initial, "Flaş")
+        self.assertEqual(recommended, "Flaş Ürün")
+        self.assertEqual(res[3], "Karşılamalı Kampanya")
         self.assertEqual(
             applicable,
             "Avantajlı, Flaş, Plus, Plus Ek İndirim, Karşılamalı Kampanya",
@@ -146,8 +147,21 @@ class CampaignInputTests(unittest.TestCase):
         res = choose_campaigns_smart(110, candidates)
         initial, recommended, applicable = res[0], res[1], res[2]
 
-        self.assertEqual((initial, recommended), ("Avantajlı", "Avantajlı Ürün"))
+        self.assertEqual((initial, recommended), ("Flaş", "Flaş Ürün"))
         self.assertIn("Avantajlı", applicable)
+
+        tied_candidates = [
+            ("Plus", 105, 110, 5),
+            ("Flaş", 105, 120, 10),
+            ("Avantajlı", 105, 120, 10),
+            ("Ekstra A", 103, 105, 2),
+            ("Ekstra B", 103, 110, 2),
+        ]
+        first = choose_campaigns_smart(100, tied_candidates)
+        reversed_order = choose_campaigns_smart(100, list(reversed(tied_candidates)))
+        self.assertEqual(first[0], "Avantajlı")
+        self.assertEqual(first[3], "Ekstra B")
+        self.assertEqual((first[0], first[3]), (reversed_order[0], reversed_order[3]))
 
         res = choose_campaigns_smart(
             110,
@@ -378,6 +392,240 @@ class CalculatorInputTests(unittest.TestCase):
             row = result["results"][0]
             self.assertEqual(row["İlk Kampanya Seçimi"], "Hiçbiri")
             self.assertEqual(row["eligible_campaigns"], ["Hiçbiri"])
+
+    def test_template_prices_without_real_floor_are_not_recommended(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            advantage = root / "advantage.xlsx"
+            flash = root / "flash.xlsx"
+            plus = root / "plus.xlsx"
+
+            pd.DataFrame([{"BARKOD": "A1", "Eski Fiyat": None, "YENİ Fiyat": None}]).to_excel(discount, index=False)
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "1.Fiyat Alt Limit": 0,
+                "1.KOMİSYON": 10,
+                "2.KOMİSYON": 10,
+                "3.KOMİSYON": 10,
+                "4.KOMİSYON": 10,
+            }]).to_excel(commission, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Komisyon Oranı": 10,
+                "Piyasa Satış Fiyatı (KDV Dahil)": 120,
+                "Trendyol'da Satılacak Fiyat (KDV Dahil)": 100,
+            }]).to_excel(current, index=False)
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "YENİ TSF (FİYAT GÜNCELLE)": 90,
+                "1 YILDIZ ÜST FİYAT": 90,
+            }]).to_excel(advantage, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "24 Saat Fiyat": 89,
+                "3 Saat Fiyat": 89,
+            }]).to_excel(flash, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Plus Fiyat Üst Limiti": 88,
+                "Plus Komisyon Teklifi": 5,
+            }]).to_excel(plus, index=False)
+
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "advantage": advantage,
+                    "flash": flash,
+                    "plus": plus,
+                },
+                output_dir=root / "output",
+            )
+
+            row = result["results"][0]
+            self.assertEqual(row["Düşülebilecek Dip Fiyat (TL)"], None)
+            self.assertEqual(row["Önerilen Kampanya"], "Hiçbiri")
+            self.assertEqual(row["eligible_main_campaigns"], ["Hiçbiri"])
+            self.assertEqual(row["all_matching_main_campaigns"], ["Hiçbiri"])
+
+            pd.DataFrame([{
+                "BARKOD": "A1", "Eski Fiyat": 100, "YENİ Fiyat": 80, "Durum": "İndirim"
+            }]).to_excel(discount, index=False)
+            with_common_floor = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "advantage": advantage,
+                    "flash": flash,
+                    "plus": plus,
+                },
+                output_dir=root / "output-common-floor",
+            )["results"][0]
+            self.assertEqual(
+                set(with_common_floor["eligible_main_campaigns"]),
+                {"Hiçbiri", "Avantajlı", "Flaş", "Plus"},
+            )
+
+            pd.DataFrame([{"BARKOD": "A1", "Eski Fiyat": None, "YENİ Fiyat": None}]).to_excel(discount, index=False)
+            accounting_advantage = root / "accounting-advantage.xlsx"
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "TRENDYOL SATIŞ FİYATI": 90,
+            }]).to_excel(accounting_advantage, index=False)
+            with_accounting_floor = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "advantage": advantage,
+                    "flash": flash,
+                    "plus": plus,
+                    "muhasebe_avantaj": accounting_advantage,
+                },
+                output_dir=root / "output-accounting-floor",
+            )["results"][0]
+            self.assertIn("Avantajlı", with_accounting_floor["eligible_main_campaigns"])
+            self.assertEqual(with_accounting_floor["Düşülebilecek Dip Fiyat (TL)"], 90)
+
+            plus_extra = root / "plus-extra-below-accounting-floor.xlsx"
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Maksimum Girebileceğin Fiyat": 85,
+            }]).to_excel(plus_extra, index=False)
+            with_unsafe_extra = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "muhasebe_avantaj": accounting_advantage,
+                },
+                plus_extra_files=[{
+                    "path": plus_extra,
+                    "label": "Plus Ek İndirim %10",
+                    "rate": 10,
+                }],
+                output_dir=root / "output-extra-floor",
+            )["results"][0]
+            self.assertEqual(with_unsafe_extra["eligible_extra_campaigns"], ["Hiçbiri"])
+
+    def test_counter_and_coupon_minimum_prices_are_enforced_at_boundary(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            counter = root / "counter.xlsx"
+            coupon = root / "coupon.xlsx"
+
+            pd.DataFrame([
+                {"BARKOD": "LOW", "Eski Fiyat": 99, "YENİ Fiyat": 50, "Durum": "İndirim"},
+                {"BARKOD": "EDGE", "Eski Fiyat": 100, "YENİ Fiyat": 50, "Durum": "İndirim"},
+            ]).to_excel(discount, index=False)
+            pd.DataFrame([
+                {
+                    "BARKOD": barcode,
+                    "1.Fiyat Alt Limit": 0,
+                    "1.KOMİSYON": 10,
+                    "2.KOMİSYON": 10,
+                    "3.KOMİSYON": 10,
+                    "4.KOMİSYON": 10,
+                }
+                for barcode in ("LOW", "EDGE")
+            ]).to_excel(commission, index=False)
+            pd.DataFrame([
+                {
+                    "Barkod": barcode,
+                    "Komisyon Oranı": 10,
+                    "Piyasa Satış Fiyatı (KDV Dahil)": price,
+                    "Trendyol'da Satılacak Fiyat (KDV Dahil)": price,
+                }
+                for barcode, price in (("LOW", 99), ("EDGE", 100))
+            ]).to_excel(current, index=False)
+            campaign_rows = [
+                {"Barkod": "LOW", "Maksimum Girebileceğin Fiyat": 99},
+                {"Barkod": "EDGE", "Maksimum Girebileceğin Fiyat": 100},
+            ]
+            pd.DataFrame(campaign_rows).to_excel(counter, index=False)
+            pd.DataFrame(campaign_rows).to_excel(coupon, index=False)
+
+            result = calculate_all(
+                {"discount": discount, "commission": commission, "current": current},
+                counter_files=[{
+                    "path": counter,
+                    "label": "Karşılamalı Minimum",
+                    "min_price": 100,
+                    "discount_amount": 10,
+                    "trendyol_percent": 100,
+                }],
+                coupon_files=[{
+                    "path": coupon,
+                    "label": "Kupon Minimum",
+                    "min_price": 100,
+                    "discount_amount": 10,
+                    "trendyol_percent": 100,
+                }],
+                output_dir=root / "output",
+            )
+            rows = {row["Barkod"]: row for row in result["results"]}
+
+            self.assertEqual(rows["LOW"]["eligible_extra_campaigns"], ["Hiçbiri"])
+            self.assertEqual(rows["LOW"]["counter_evaluations"], {})
+            self.assertEqual(rows["LOW"]["Önerilen Ekstra Kampanya"], "Hiçbiri")
+            self.assertIn("Karşılamalı Minimum", rows["EDGE"]["eligible_extra_campaigns"])
+            self.assertIn("Kupon Minimum", rows["EDGE"]["eligible_extra_campaigns"])
+
+    def test_missing_current_net_does_not_compare_fallback_net_to_none(self):
+        from komisyon_hesaplayici import calculate_all
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            plus = root / "plus.xlsx"
+
+            pd.DataFrame([{"BARKOD": "A1", "Eski Fiyat": None, "YENİ Fiyat": None}]).to_excel(discount, index=False)
+            pd.DataFrame([{
+                "BARKOD": "A1",
+                "1.Fiyat Alt Limit": 0,
+                "1.KOMİSYON": None,
+                "2.KOMİSYON": None,
+                "3.KOMİSYON": None,
+                "4.KOMİSYON": None,
+            }]).to_excel(commission, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Komisyon Oranı": None,
+                "Piyasa Satış Fiyatı (KDV Dahil)": 100,
+                "Trendyol'da Satılacak Fiyat (KDV Dahil)": 100,
+            }]).to_excel(current, index=False)
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Plus Fiyat Üst Limiti": None,
+                "Plus Komisyon Teklifi": 10,
+            }]).to_excel(plus, index=False)
+
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "plus": plus,
+                },
+                output_dir=root / "output",
+            )
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["results"][0]["eligible_main_campaigns"], ["Hiçbiri"])
 
     def test_parse_counter_filename_percentage_mode(self):
         from input_files import parse_counter_filename

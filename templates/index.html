@@ -4,16 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Trendyol ürün kampanyalarını, dip fiyatları ve net kazancı Excel girdileriyle karşılaştırıp güvenli çıktılar üretin.">
     <title>Trendyol Kampanya Yönetimi</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%234f46e5'/%3E%3Cpath d='M36 8 16 36h14l-2 20 20-30H34z' fill='white'/%3E%3C/svg%3E">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.dataset.theme = savedTheme || (prefersDark ? 'dark' : 'light');
+        })();
+    </script>
+
     <!-- Tailwind CSS & DaisyUI 5 -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
@@ -23,6 +33,33 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--color-base-200, #f3f4f6);
             color: var(--color-base-content, #1f2937);
+            --campaign-advantage-bg: color-mix(in oklab, var(--color-success) 18%, var(--color-base-100));
+            --campaign-advantage-hover: color-mix(in oklab, var(--color-success) 28%, var(--color-base-100));
+            --campaign-flash-bg: color-mix(in oklab, var(--color-info) 18%, var(--color-base-100));
+            --campaign-flash-hover: color-mix(in oklab, var(--color-info) 28%, var(--color-base-100));
+            --campaign-plus-bg: color-mix(in oklab, var(--color-warning) 18%, var(--color-base-100));
+            --campaign-plus-hover: color-mix(in oklab, var(--color-warning) 28%, var(--color-base-100));
+        }
+
+        [data-theme="dark"] {
+            --color-primary: #a5b4fc;
+            --color-primary-content: #111827;
+            --color-warning: #fbbf24;
+        }
+
+        [data-theme="dark"] .text-base-content\/40 {
+            color: color-mix(in srgb, var(--color-base-content) 72%, transparent) !important;
+        }
+
+        [data-theme="dark"] .opacity-60 { opacity: 0.82; }
+        [data-theme="dark"] .opacity-70 { opacity: 0.86; }
+
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
         }
 
         .highlight {
@@ -73,29 +110,12 @@
         }
 
         /* Custom Row Highlighting Colors */
-        .row-avantajli {
-            background-color: #dcfce7 !important;
-        }
-
-        .row-avantajli:hover {
-            background-color: #bbf7d0 !important;
-        }
-
-        .row-flas {
-            background-color: #e0f2fe !important;
-        }
-
-        .row-flas:hover {
-            background-color: #bae6fd !important;
-        }
-
-        .row-plus {
-            background-color: #fef08a !important;
-        }
-
-        .row-plus:hover {
-            background-color: #fde047 !important;
-        }
+        .row-avantajli { background-color: var(--campaign-advantage-bg) !important; }
+        .row-avantajli:hover { background-color: var(--campaign-advantage-hover) !important; }
+        .row-flas { background-color: var(--campaign-flash-bg) !important; }
+        .row-flas:hover { background-color: var(--campaign-flash-hover) !important; }
+        .row-plus { background-color: var(--campaign-plus-bg) !important; }
+        .row-plus:hover { background-color: var(--campaign-plus-hover) !important; }
 
         #loadingOverlay {
             z-index: 9999;
@@ -127,7 +147,7 @@
 <body class="min-h-screen bg-base-200/50 text-base-content antialiased">
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" style="display: none;"
+    <div id="loadingOverlay" role="status" aria-live="polite" aria-busy="true" style="display: none;"
         class="fixed inset-0 z-[9999] bg-base-300/80 backdrop-blur-md flex flex-col justify-center items-center text-base-content">
         <span class="loading loading-spinner loading-lg text-primary"></span>
         <h2 class="mt-4 text-lg font-bold tracking-tight">İşlemler gerçekleştiriliyor, lütfen bekleyin...</h2>
@@ -135,12 +155,12 @@
     </div>
 
     <!-- Toast Notifications -->
-    <div class="toast toast-bottom toast-end z-[9999]" id="toastContainer"></div>
+    <div class="toast toast-bottom toast-end z-[9999]" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Header Navbar -->
     <header
-        class="navbar bg-base-100/90 backdrop-blur-md border-b border-base-200 sticky top-0 z-50 px-4 md:px-8 shadow-2xs">
-        <div class="flex-1 gap-3 flex items-center">
+        class="navbar bg-base-100/90 backdrop-blur-md border-b border-base-200 sticky top-0 z-50 px-3 md:px-8 shadow-2xs flex-wrap gap-2">
+        <div class="flex-1 min-w-0 gap-3 flex items-center">
             <div class="p-2 bg-primary/10 text-primary rounded-2xl border border-primary/20">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
@@ -148,16 +168,21 @@
                         d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
             </div>
-            <div>
-                <h1 class="text-lg md:text-xl font-extrabold tracking-tight text-base-content flex items-center gap-2">
+            <div class="min-w-0">
+                <h1 class="text-base md:text-xl font-extrabold tracking-tight text-base-content flex items-center gap-2 truncate">
                     Trendyol Kampanya Yönetimi
                 </h1>
-                <p class="text-[11px] text-base-content/60 font-medium">Akıllı Komisyon & Kârlılık Otomasyon Sistemi</p>
+                <p class="text-[11px] text-base-content/60 font-medium hidden sm:block">Akıllı Komisyon & Kârlılık Otomasyon Sistemi</p>
             </div>
         </div>
 
-        <div class="flex-none gap-3">
-            <button class="btn btn-primary btn-sm font-semibold shadow-sm gap-2" onclick="calculateData()">
+        <div class="flex-none gap-2">
+            <label class="btn btn-ghost btn-sm gap-2 rounded-xl focus-visible:outline" title="Gece modu">
+                <span class="text-xs font-semibold hidden sm:inline">Gece</span>
+                <input id="themeToggle" type="checkbox" value="dark"
+                    class="theme-controller toggle toggle-sm toggle-primary" aria-label="Gece modu">
+            </label>
+            <button class="btn btn-primary btn-sm font-semibold shadow-sm gap-2 focus-visible:outline" onclick="calculateData()">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -169,10 +194,20 @@
     </header>
 
     <!-- Main Container -->
-    <main class="p-4 md:p-8 w-full max-w-none space-y-6">
+    <main class="p-3 md:p-8 w-full max-w-[1800px] mx-auto space-y-6">
+
+        <nav aria-label="İş akışı" class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl">
+            <div class="card-body p-3 md:p-4">
+                <ul class="steps steps-horizontal overflow-x-auto text-xs">
+                    <li class="step step-primary"><a class="link link-hover focus-visible:outline" href="#excel-girdileri">Girdiler</a></li>
+                    <li class="step step-primary"><a class="link link-hover focus-visible:outline" href="#toplu-islemler">Seçimler</a></li>
+                    <li class="step step-primary"><a class="link link-hover focus-visible:outline" href="#kampanya-tablosu">Tablo</a></li>
+                </ul>
+            </div>
+        </nav>
 
         <!-- Excel Girdileri Kartı -->
-        <div class="card bg-base-100 shadow-sm border border-base-200 rounded-2xl">
+        <div id="excel-girdileri" class="card bg-base-100 shadow-sm border border-base-200 rounded-2xl scroll-mt-24">
             <div class="card-body p-5 md:p-6 space-y-5">
                 <div class="flex items-center justify-between gap-3 pb-3 border-b border-base-200">
                     <div>
@@ -198,10 +233,10 @@
                                 <h3 class="text-xs md:text-sm font-bold uppercase tracking-wider text-base-content">
                                     Temel Ürün Listeleri</h3>
                                 <p class="text-[11px] text-base-content/60">Ürün Listesi ve Komisyon Tarifeleri
-                                    zorunludur. İndirim Uygulanabilecek Ürünler opsiyoneldir.</p>
+                                    zorunludur. İndirim Uygulanabilecek Ürünler de zorunludur.</p>
                             </div>
                         </div>
-                        <span class="badge badge-error badge-outline text-[10px] font-bold">* Zorunlu 2 Girdi</span>
+                        <span class="badge badge-error badge-outline text-[10px] font-bold">* Zorunlu 3 Girdi</span>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -222,6 +257,7 @@
                                     <div id="badge_single_{{ key }}"></div>
                                 </div>
                                 <input id="input_{{ key }}" type="file" accept=".xlsx"
+                                    aria-label="{{ spec.label }} Excel dosyası"
                                     data-required="{{ 'true' if is_req else 'false' }}"
                                     data-uploaded="{{ 'true' if uploaded else 'false' }}"
                                     class="file-input file-input-bordered file-input-primary file-input-xs w-full rounded-lg">
@@ -283,6 +319,7 @@
                                     <div id="badge_single_{{ key }}"></div>
                                 </div>
                                 <input id="input_{{ key }}" type="file" accept=".xlsx" data-required="false"
+                                    aria-label="{{ spec.label }} Excel dosyası"
                                     data-uploaded="{{ 'true' if uploaded else 'false' }}"
                                     class="file-input file-input-bordered file-input-warning file-input-xs w-full rounded-lg">
 
@@ -343,6 +380,7 @@
                                     <div id="badge_single_{{ key }}"></div>
                                 </div>
                                 <input id="input_{{ key }}" type="file" accept=".xlsx" data-required="false"
+                                    aria-label="{{ spec.label }} Excel dosyası"
                                     data-uploaded="{{ 'true' if uploaded else 'false' }}"
                                     class="file-input file-input-bordered file-input-success file-input-xs w-full rounded-lg">
 
@@ -475,7 +513,7 @@
         </div>
 
         <!-- Control Panel Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div id="toplu-islemler" class="grid grid-cols-1 lg:grid-cols-12 gap-6 scroll-mt-24">
 
             <!-- Left Panel: Actions & Bulk -->
             <div class="lg:col-span-8 space-y-6">
@@ -514,7 +552,7 @@
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         <div>
                                             <span class="text-[11px] font-semibold text-base-content/60 block mb-1">Ana Kampanya</span>
-                                            <select id="bulkCampaignSelect"
+                                            <select id="bulkCampaignSelect" aria-label="Ana kampanya toplu seçimi"
                                                 class="select select-bordered select-xs focus:outline-none w-full font-semibold rounded-lg">
                                                 <option value="NO_CHANGE">Değiştirme</option>
                                                 <option value="Avantajlı">Avantajlı Yap</option>
@@ -525,7 +563,7 @@
                                         </div>
                                         <div>
                                             <span class="text-[11px] font-semibold text-base-content/60 block mb-1">Ekstra Kampanya</span>
-                                            <select id="bulkExtraCampaignSelect"
+                                            <select id="bulkExtraCampaignSelect" aria-label="Ekstra kampanya toplu seçimi"
                                                 class="select select-bordered select-xs focus:outline-none w-full font-semibold rounded-lg">
                                                 <option value="NO_CHANGE">Değiştirme</option>
                                                 <option value="Hiçbiri">Hiçbiri (Temizle)</option>
@@ -672,7 +710,7 @@
         </div>
 
         <!-- Data Table Card (ÇİFT TARAFLI SABİT KONTROL ÇUBUKLARI - SIFIR KAYMA) -->
-        <div class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden rounded-2xl w-full mb-6">
+        <div id="kampanya-tablosu" class="card bg-base-100 shadow-xl border border-base-200 overflow-hidden rounded-2xl w-full mb-6 scroll-mt-24">
             <!-- ÜST KONTROL ÇUBUĞU (SABİT) -->
             <div id="tableTopHeaderControls" class="p-4 bg-base-100 border-b border-base-200">
                 <!-- Dynamic Dual Controls Rendered Here -->
@@ -682,13 +720,14 @@
             <div class="overflow-x-auto w-full table-container">
                 <table id="campaignTable"
                     class="table table-zebra w-full border-collapse border border-base-200 text-xs">
+                    <caption class="sr-only">Kampanya hesaplama sonuçları ve uygulanacak kampanya seçimleri</caption>
                     <thead
                         class="bg-base-200/80 text-base-content text-xs font-bold uppercase tracking-wider border-b border-base-300">
                         <tr>
                             <th class="no-sort text-center w-10 text-[11px] opacity-70">#</th>
                             <th class="no-sort" style="width:35px; text-align:center;"><input type="checkbox" id="selectAll"
                                     class="checkbox checkbox-xs checkbox-primary" onclick="toggleAll(this)"
-                                    title="Tümünü Seç"></th>
+                                    title="Tümünü Seç" aria-label="Tüm ürünleri seç"></th>
                             {% for column in report_columns %}<th>{{ column }}</th>{% endfor %}
                         </tr>
                         <tr class="filters bg-base-200/40">
@@ -752,6 +791,17 @@
             'Karşılamalı Kampanya': 'Karşılamalı Kampanya'
         };
         var CAMPAIGN_LABELS = window.CAMPAIGN_LABELS;
+
+        function initThemeToggle() {
+            const toggle = document.getElementById('themeToggle');
+            if (!toggle) return;
+            toggle.checked = document.documentElement.dataset.theme === 'dark';
+            toggle.addEventListener('change', () => {
+                const theme = toggle.checked ? 'dark' : 'light';
+                document.documentElement.dataset.theme = theme;
+                localStorage.setItem('theme', theme);
+            });
+        }
 
         function asNumber(value) {
             if (value === null || value === undefined || value === '') return null;
@@ -1082,9 +1132,12 @@
             tableData.forEach(row => {
                 const stok = asNumber(row['Stok Adedi']);
                 if (ignoreZeroStockChecked && stok !== null && stok === 0) {
-                    selections[row.Barkod] = 'Hiçbiri';
+                    selections[row.Barkod] = { main: 'Hiçbiri', extra: 'Hiçbiri' };
                 } else {
-                    selections[row.Barkod] = row.userSelection || 'Hiçbiri';
+                    selections[row.Barkod] = {
+                        main: row.userSelection || 'Hiçbiri',
+                        extra: row.userExtraSelection || 'Hiçbiri'
+                    };
                 }
             });
 
@@ -1132,6 +1185,7 @@
         let customMaxPriceVal = null;
 
         // Initial load
+        initThemeToggle();
         loadData();
 
         window.onStockFilterChange = function onStockFilterChange(checked) {
@@ -1874,16 +1928,6 @@
             saveUserSelections();
         }
 
-        function autoSelect() {
-            tableData.forEach(row => {
-                row.userSelection = row['Önerilen Kampanya'] || 'Hiçbiri';
-                row.userExtraSelection = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';
-            });
-            renderTable();
-            saveUserSelections();
-            showToast('Önerilen kampanyalar ve ekstra kampanyalar tüm ürünlere seçildi.', 'success');
-        }
-
         function clearSelections() {
             tableData.forEach(row => {
                 row.userSelection = 'Hiçbiri';
@@ -2004,7 +2048,7 @@
 
             const safeEligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : ['Hiçbiri'];
 
-            let selectHtml = `<select class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
+            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
 
             matching.forEach(cName => {
                 const isSelected = (row.userSelection || 'Hiçbiri') === cName;
@@ -2075,7 +2119,7 @@
             const matchingList = Array.from(extraSet);
             const safeEligible = Array.isArray(row.eligible_extra_campaigns) ? row.eligible_extra_campaigns : ['Hiçbiri'];
 
-            let selectHtml = `<select class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
+            let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ekstra kampanya seçimi" class="select select-bordered select-xs w-full max-w-[210px] font-semibold campaign-select border-accent/40 focus:border-accent rounded-lg" onchange="updateExtraSelection(${rowIndex}, this.value)">`;
 
             matchingList.forEach(cName => {
                 const isSelected = (row.userExtraSelection || 'Hiçbiri') === cName;
@@ -2134,7 +2178,7 @@
                     orderable: false,
                     render: function (data, type, row) {
                         return type === 'display'
-                            ? `<input type="checkbox" class="checkbox checkbox-xs row-checkbox checkbox-primary" ${row.checked ? 'checked' : ''} onchange="updateCheck(${row._index}, this.checked)">`
+                            ? `<input type="checkbox" class="checkbox checkbox-xs row-checkbox checkbox-primary" aria-label="Ürünü seç" ${row.checked ? 'checked' : ''} onchange="updateCheck(${row._index}, this.checked)">`
                             : row.checked;
                     }
                 }
@@ -2178,7 +2222,7 @@
                         </label>
 
                         <div class="relative min-w-[210px]">
-                            <input type="text" id="${prefix}_search" class="input input-bordered input-xs w-full pl-7 text-xs border-base-300 rounded-lg focus:input-primary" placeholder="Ürün / Barkod Ara..." onkeyup="onCustomSearchKeyUp(this.value)">
+                            <input type="text" id="${prefix}_search" aria-label="Ürün veya barkod ara" class="input input-bordered input-xs w-full pl-7 text-xs border-base-300 rounded-lg focus:input-primary" placeholder="Ürün / Barkod Ara..." onkeyup="onCustomSearchKeyUp(this.value)">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 absolute left-2 top-2 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
@@ -2191,9 +2235,9 @@
 
                         <div class="flex items-center gap-1.5 bg-base-200/60 px-2.5 py-1 rounded-lg border border-base-300/80">
                             <span class="text-xs font-semibold text-base-content/80 whitespace-nowrap">Fiyat Aralığı:</span>
-                            <input type="number" id="${prefix}_min_price" class="input input-bordered input-xs w-16 text-xs rounded-md focus:input-primary" placeholder="Min TL" onkeyup="onCustomPriceRangeChange()" onchange="onCustomPriceRangeChange()">
+                            <input type="number" id="${prefix}_min_price" aria-label="Minimum fiyat" class="input input-bordered input-xs w-16 text-xs rounded-md focus:input-primary" placeholder="Min TL" onkeyup="onCustomPriceRangeChange()" onchange="onCustomPriceRangeChange()">
                             <span class="text-xs text-base-content/40">-</span>
-                            <input type="number" id="${prefix}_max_price" class="input input-bordered input-xs w-16 text-xs rounded-md focus:input-primary" placeholder="Max TL" onkeyup="onCustomPriceRangeChange()" onchange="onCustomPriceRangeChange()">
+                            <input type="number" id="${prefix}_max_price" aria-label="Maksimum fiyat" class="input input-bordered input-xs w-16 text-xs rounded-md focus:input-primary" placeholder="Max TL" onkeyup="onCustomPriceRangeChange()" onchange="onCustomPriceRangeChange()">
                         </div>
                     </div>
 

@@ -22,6 +22,7 @@ import os
 import json
 import math
 import re
+from io import BytesIO
 import openpyxl
 import pandas as pd
 from datetime import datetime, timedelta
@@ -98,6 +99,7 @@ VALID_TARGET_TYPES = {
     "Plus Ek İndirim",
     "Karşılamalı Kampanya",
 }
+MAIN_SELECTIONS = {"Hiçbiri", "Avantajlı", "Flaş", "Plus"}
 
 
 def as_number(value):
@@ -105,7 +107,7 @@ def as_number(value):
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return None if pd.isna(number) else number
+    return number if math.isfinite(number) else None
 
 
 def parse_persisted_collection(value, expected_type):
@@ -138,9 +140,31 @@ def restore_persisted_collections(frame):
     })
 
 
+def normalize_selection(selection):
+    if isinstance(selection, str):
+        value = selection.strip()
+        if not value:
+            return None
+        return (value, "Hiçbiri") if value in MAIN_SELECTIONS else ("Hiçbiri", value)
+    if not isinstance(selection, dict) or set(selection) - {"main", "extra"}:
+        return None
+    main = selection.get("main", "Hiçbiri")
+    extra = selection.get("extra", "Hiçbiri")
+    if (
+        not isinstance(main, str)
+        or not isinstance(extra, str)
+        or main not in MAIN_SELECTIONS
+        or not extra.strip()
+    ):
+        return None
+    return main, extra.strip()
+
+
 def selection_payload_is_valid(selections):
     return isinstance(selections, dict) and all(
-        isinstance(barcode, str) and (isinstance(selection, str) or isinstance(selection, dict))
+        isinstance(barcode, str)
+        and bool(barcode.strip())
+        and normalize_selection(selection) is not None
         for barcode, selection in selections.items()
     )
 
@@ -308,13 +332,44 @@ def normalize_visible_columns(requested):
 def campaign_selection_is_applicable(selection, applicable_value):
     if selection == "Hiçbiri":
         return True
-    campaign = "Plus Ek İndirim" if selection.startswith("Plus Ek İndirim %") else selection
+    if not isinstance(selection, str):
+        return False
     applicable = {
         item.strip()
         for item in str(applicable_value or "").split(",")
         if item.strip()
     }
+    if selection in applicable:
+        return True
+    if selection.startswith("Plus Ek İndirim"):
+        campaign = "Plus Ek İndirim"
+    elif selection.startswith("Karşılamalı"):
+        campaign = "Karşılamalı Kampanya"
+    elif "Kupon" in selection:
+        campaign = "Kupon"
+    else:
+        campaign = selection
     return campaign in applicable
+
+
+def row_selection_is_applicable(row, main_selection, extra_selection):
+    main_options = row.get("eligible_main_campaigns")
+    extra_options = row.get("eligible_extra_campaigns")
+    main_ok = (
+        main_selection in main_options
+        if isinstance(main_options, list) and main_options
+        else campaign_selection_is_applicable(
+            main_selection, row.get("Uygulanabilir Kampanyalar")
+        )
+    )
+    extra_ok = (
+        extra_selection in extra_options
+        if isinstance(extra_options, list) and extra_options
+        else campaign_selection_is_applicable(
+            extra_selection, row.get("Uygulanabilir Kampanyalar")
+        )
+    )
+    return main_ok and extra_ok
 
 
 def calculation_result_is_current():
@@ -358,40 +413,108 @@ def download_file(folder, filename):
     return send_from_directory(folder_dir, filename, as_attachment=True)
 
 def safe_keep_rows(ws, keep_row_indices):
-    import re
-    if not keep_row_indices:
+    original_max_row = ws.max_row
+    keep_rows = sorted({
+        row for row in keep_row_indices
+        if isinstance(row, int) and 2 <= row <= original_max_row
+    })
+    if not keep_rows:
         if ws.max_row > 1:
             ws.delete_rows(2, ws.max_row - 1)
         return
 
-    rows_to_delete = []
+    max_column = ws.max_column
+    last_column = openpyxl.utils.get_column_letter(max_column)
+    for target_row, source_row in enumerate(keep_rows, 2):
+        if target_row != source_row:
+            ws.move_range(
+                f"A{source_row}:{last_column}{source_row}",
+                rows=target_row - source_row,
+            )
+
+    first_unused_row = len(keep_rows) + 2
+    if first_unused_row <= original_max_row:
+        ws.delete_rows(first_unused_row, original_max_row - first_unused_row + 1)
+
     for r in range(2, ws.max_row + 1):
-        if r not in keep_row_indices:
-            rows_to_delete.append(r)
-    
-    blocks = []
-    if rows_to_delete:
-        start = rows_to_delete[0]
-        end = start
-        for r in rows_to_delete[1:]:
-            if r == end + 1:
-                end = r
-            else:
-                blocks.append((start, end - start + 1))
-                start = r
-                end = r
-        blocks.append((start, end - start + 1))
-        
-    for start, amount in reversed(blocks):
-        ws.delete_rows(start, amount)
-        
-    for r in range(2, ws.max_row + 1):
-        for c in range(1, ws.max_column + 1):
+        for c in range(1, max_column + 1):
             cell = ws.cell(r, c)
             val = cell.value
             if isinstance(val, str) and (val.startswith('=') or val.startswith('==')):
                 new_val = re.sub(r'([a-zA-Z]+)\d+\b', r'\g<1>' + str(r), val)
                 cell.value = new_val
+
+
+def header_index(ws, name):
+    wanted = str(name).strip().casefold()
+    for column in range(1, ws.max_column + 1):
+        if str(ws.cell(1, column).value or "").strip().casefold() == wanted:
+            return column
+    return None
+
+
+def ensure_header(ws, name):
+    existing = header_index(ws, name)
+    if existing:
+        return existing
+    column = ws.max_column + 1
+    ws.cell(1, column).value = name
+    return column
+
+
+def load_merged_campaign_workbook(standard_path, accounting_path, barcode_header):
+    paths = [path for path in (standard_path, accounting_path) if path and os.path.exists(path)]
+    if not paths:
+        return None
+
+    workbook = openpyxl.load_workbook(paths[0])
+    target = workbook.active
+    target_barcode_column = header_index(target, barcode_header)
+    if not target_barcode_column:
+        return workbook
+
+    existing_barcodes = {
+        str(target.cell(row, target_barcode_column).value or "").strip()
+        for row in range(2, target.max_row + 1)
+    }
+    target_columns = {
+        str(target.cell(1, column).value or "").strip().casefold(): column
+        for column in range(1, target.max_column + 1)
+    }
+    for source_path in paths[1:]:
+        source = openpyxl.load_workbook(source_path, data_only=False).active
+        source_barcode_column = header_index(source, barcode_header)
+        if not source_barcode_column:
+            continue
+        source_columns = {
+            str(source.cell(1, column).value or "").strip().casefold(): column
+            for column in range(1, source.max_column + 1)
+        }
+        shared_columns = {
+            target_column: source_columns[name]
+            for name, target_column in target_columns.items()
+            if name in source_columns
+        }
+        for row in range(2, source.max_row + 1):
+            barcode = str(source.cell(row, source_barcode_column).value or "").strip()
+            if not barcode or barcode in existing_barcodes:
+                continue
+            target_row = target.max_row + 1
+            for target_column, source_column in shared_columns.items():
+                target.cell(target_row, target_column).value = source.cell(
+                    row, source_column
+                ).value
+            target.cell(target_row, target_barcode_column).value = barcode
+            existing_barcodes.add(barcode)
+    return workbook
+
+
+def clone_workbook(workbook):
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return openpyxl.load_workbook(buffer)
+
 
 def shrink_data_validations(ws):
     max_row = ws.max_row
@@ -641,6 +764,15 @@ def calculate():
         }
 
         input_files = save_upload_set(standard_files, UPLOAD_DIR, INPUT_MANIFEST)
+        missing_base_inputs = [
+            INPUT_SPECS[key]["label"]
+            for key in ("discount", "commission", "current")
+            if not input_files.get(key)
+        ]
+        if missing_base_inputs:
+            raise InputValidationError(
+                f"Zorunlu girdiler eksik: {', '.join(missing_base_inputs)}"
+            )
 
         single_expiries_raw = request.form.get("single_expiries_json")
         if single_expiries_raw:
@@ -855,17 +987,24 @@ def apply_campaign():
         if ignore_zero_stock and stok is not None and stok == 0:
             continue
 
-        selection = selections.get(
-            barcode, row.get("İlk Kampanya Seçimi", "Hiçbiri")
-        )
-        if not campaign_selection_is_applicable(
-            selection, row.get("Uygulanabilir Kampanyalar")
-        ):
+        selection = selections.get(barcode, {
+            "main": row.get("İlk Kampanya Seçimi", "Hiçbiri") or "Hiçbiri",
+            "extra": row.get("İlk Ekstra Kampanya Seçimi", "Hiçbiri") or "Hiçbiri",
+        })
+        normalized = normalize_selection(selection)
+        if not normalized:
+            return jsonify({
+                "success": False,
+                "message": "Kampanya seçimleri geçersiz.",
+            }), 400
+        main_selection, extra_selection = normalized
+        if not row_selection_is_applicable(row, main_selection, extra_selection):
             return jsonify({
                 "success": False,
                 "message": "Seçilen kampanya ürün için uygulanabilir değil.",
             }), 400
-        row["userSelection"] = selection
+        row["userSelection"] = main_selection
+        row["userExtraSelection"] = extra_selection
         table_data.append(row)
 
     F_AVAN = input_files.get("advantage")
@@ -873,10 +1012,13 @@ def apply_campaign():
     F_PLUS = input_files.get("plus")
     F_PLUS_EK = input_files.get("plus_extra")
     F_KARS = input_files.get("counter")
+    F_MUH_AVAN = input_files.get("muhasebe_avantaj")
+    F_MUH_FLAS = input_files.get("muhasebe_flas")
+    F_MUH_PLUS = input_files.get("muhasebe_plus")
     target_inputs = {
-        "Avantajlı": F_AVAN,
-        "Flaş": F_FLAS,
-        "Plus": F_PLUS,
+        "Avantajlı": F_AVAN or F_MUH_AVAN,
+        "Flaş": F_FLAS or F_MUH_FLAS,
+        "Plus": F_PLUS or F_MUH_PLUS,
         "Plus Ek İndirim": F_PLUS_EK,
         "Karşılamalı Kampanya": F_KARS,
     }
@@ -900,23 +1042,20 @@ def apply_campaign():
             row_by_barcode[b_key] = row
 
     def get_selection(b_key):
-        val = selections.get(b_key, "Hiçbiri")
-        if isinstance(val, dict):
-            return val.get('main', 'Hiçbiri'), val.get('extra', 'Hiçbiri')
-        s = str(val or 'Hiçbiri')
-        if s in ('Avantajlı', 'Flaş', 'Plus', 'Hiçbiri'):
-            return s, 'Hiçbiri'
-        return 'Hiçbiri', s
+        row = row_by_barcode.get(b_key, {})
+        return (
+            row.get("userSelection", "Hiçbiri") or "Hiçbiri",
+            row.get("userExtraSelection", "Hiçbiri") or "Hiçbiri",
+        )
 
     # 1. Process Avantajlı
-    if target_type in ['Hepsi', 'Avantajlı'] and F_AVAN:
+    if target_type in ['Hepsi', 'Avantajlı'] and (F_AVAN or F_MUH_AVAN):
         try:
-            wb_av = openpyxl.load_workbook(F_AVAN)
+            wb_av = load_merged_campaign_workbook(F_AVAN, F_MUH_AVAN, "BARKOD")
             ws_av = wb_av.active
-            header_av = [ws_av.cell(1, c).value for c in range(1, ws_av.max_column + 1)]
-            b_idx_av = header_av.index('BARKOD') + 1 if 'BARKOD' in header_av else None
-            tsf_idx_av = header_av.index('YENİ TSF (FİYAT GÜNCELLE)') + 1 if 'YENİ TSF (FİYAT GÜNCELLE)' in header_av else None
-            tarife_idx_av = header_av.index('Tarife Sonuna Kadar Uygula') + 1 if 'Tarife Sonuna Kadar Uygula' in header_av else None
+            b_idx_av = header_index(ws_av, 'BARKOD')
+            tsf_idx_av = ensure_header(ws_av, 'YENİ TSF (FİYAT GÜNCELLE)')
+            tarife_idx_av = ensure_header(ws_av, 'Tarife Sonuna Kadar Uygula')
         
             if b_idx_av and tsf_idx_av:
                 keep_rows = []
@@ -947,15 +1086,14 @@ def apply_campaign():
             return processing_error("Avantajlı dosya")
 
     # 2. Process Flaş (Grouped by Date)
-    if target_type in ['Hepsi', 'Flaş'] and F_FLAS:
+    if target_type in ['Hepsi', 'Flaş'] and (F_FLAS or F_MUH_FLAS):
         try:
-            wb_fl = openpyxl.load_workbook(F_FLAS)
+            wb_fl = load_merged_campaign_workbook(F_FLAS, F_MUH_FLAS, "Barkod")
             ws_fl = wb_fl.active
-            header_fl = [ws_fl.cell(1, c).value for c in range(1, ws_fl.max_column + 1)]
-            b_idx_fl = header_fl.index('Barkod') + 1 if 'Barkod' in header_fl else None
-            fiyat_24_idx = header_fl.index('24 Saat Fiyat') + 1 if '24 Saat Fiyat' in header_fl else None
-            guncel_fiyat_idx = header_fl.index('Güncellenecek Fiyat') + 1 if 'Güncellenecek Fiyat' in header_fl else None
-            baslangic_idx = header_fl.index('24 Saat Flaş Başlangıç Tarihi') + 1 if '24 Saat Flaş Başlangıç Tarihi' in header_fl else None
+            b_idx_fl = header_index(ws_fl, 'Barkod')
+            fiyat_24_idx = ensure_header(ws_fl, '24 Saat Fiyat')
+            guncel_fiyat_idx = ensure_header(ws_fl, 'Güncellenecek Fiyat')
+            baslangic_idx = ensure_header(ws_fl, '24 Saat Flaş Başlangıç Tarihi')
         
             if b_idx_fl and fiyat_24_idx and guncel_fiyat_idx and baslangic_idx:
                 date_groups = {} # {date_str: [row_indices]}
@@ -970,16 +1108,18 @@ def apply_campaign():
                 
                     if should_keep:
                         date_val = str(ws_fl.cell(r, baslangic_idx).value or "").strip()
-                        date_key = date_val.split()[0].replace('/', '_').replace('-', '_')
-                        if not date_key or date_key == 'None':
-                            date_key = "Genel"
+                        date_key = (
+                            date_val.split()[0].replace('/', '_').replace('-', '_')
+                            if date_val
+                            else "Genel"
+                        )
                         if date_key not in date_groups:
                             date_groups[date_key] = []
                         date_groups[date_key].append(r)
             
                 for date_key, keep_rows in date_groups.items():
                     if keep_rows:
-                        wb_copy = openpyxl.load_workbook(F_FLAS)
+                        wb_copy = clone_workbook(wb_fl)
                         ws_copy = wb_copy.active
                         for r in keep_rows:
                             barcode = str(ws_copy.cell(r, b_idx_fl).value or '').strip()
@@ -999,15 +1139,16 @@ def apply_campaign():
 
     # 3. Process Plus (Grouped by Date Interval)
     if target_type in ['Hepsi', 'Plus']:
-        if F_PLUS:
+        if F_PLUS or F_MUH_PLUS:
             try:
-                wb_plus = openpyxl.load_workbook(F_PLUS)
+                wb_plus = load_merged_campaign_workbook(F_PLUS, F_MUH_PLUS, "Barkod")
                 ws_plus = wb_plus.active
                 header_plus = [ws_plus.cell(1, c).value for c in range(1, ws_plus.max_column + 1)]
-                b_idx_plus = header_plus.index('Barkod') + 1 if 'Barkod' in header_plus else None
-                fiyat_secim_idx = header_plus.index('Plus Fiyat Seçimi') + 1 if 'Plus Fiyat Seçimi' in header_plus else None
-                tarife_secim_idx = header_plus.index('Tarife Seçimi') + 1 if 'Tarife Seçimi' in header_plus else None
-                ust_limit_idx = header_plus.index('Plus Fiyat Üst Limiti') + 1 if 'Plus Fiyat Üst Limiti' in header_plus else None
+                b_idx_plus = header_index(ws_plus, 'Barkod')
+                fiyat_secim_idx = ensure_header(ws_plus, 'Plus Fiyat Seçimi')
+                tarife_secim_idx = ensure_header(ws_plus, 'Tarife Seçimi')
+                ust_limit_idx = ensure_header(ws_plus, 'Plus Fiyat Üst Limiti')
+                header_plus = [ws_plus.cell(1, c).value for c in range(1, ws_plus.max_column + 1)]
             
                 tarih_idx_plus = None
                 gun_sayisi = 7
@@ -1050,7 +1191,7 @@ def apply_campaign():
 
                     for date_key, keep_rows in date_groups.items():
                         if keep_rows:
-                            wb_copy = openpyxl.load_workbook(F_PLUS)
+                            wb_copy = clone_workbook(wb_plus)
                             ws_copy = wb_copy.active
                             for r in keep_rows:
                                 ust_lim = ws_copy.cell(r, ust_limit_idx).value
@@ -1301,17 +1442,26 @@ def apply_campaign():
                 df_all = df_all.drop(columns=['checked'])
             if 'userSelection' not in df_all.columns:
                 df_all['userSelection'] = 'Hiçbiri'
+            if 'userExtraSelection' not in df_all.columns:
+                df_all['userExtraSelection'] = 'Hiçbiri'
+            selection_columns = {
+                'userSelection': 'Uygulanan Kampanya Seçimi',
+                'userExtraSelection': 'Uygulanan Ekstra Kampanya Seçimi',
+            }
             
             # 1. Uygulanmayanlar
-            df_unapplied = df_all[df_all['userSelection'] == 'Hiçbiri'].copy()
-            df_unapplied.rename(columns={'userSelection': 'Uygulanan Kampanya Seçimi'}, inplace=True)
+            df_unapplied = df_all[
+                (df_all['userSelection'] == 'Hiçbiri')
+                & (df_all['userExtraSelection'] == 'Hiçbiri')
+            ].copy()
+            df_unapplied.rename(columns=selection_columns, inplace=True)
             out_unapplied = os.path.join(run_output_dir, "Uygulanmayan_Urunler_Raporu.xlsx")
             df_unapplied.to_excel(out_unapplied, index=False)
             fix_xlsx_for_trendyol(out_unapplied)
             generated_files.append(os.path.join(timestamp_folder, "Uygulanmayan_Urunler_Raporu.xlsx"))
             
             # 2. Tüm Rapor
-            df_all.rename(columns={'userSelection': 'Uygulanan Kampanya Seçimi'}, inplace=True)
+            df_all.rename(columns=selection_columns, inplace=True)
             out_report = os.path.join(run_output_dir, "Kampanya_Genel_Raporu.xlsx")
             df_all.to_excel(out_report, index=False)
             fix_xlsx_for_trendyol(out_report)
@@ -1326,7 +1476,7 @@ def apply_campaign():
             
             try:
                 from fiyat_farki_analiz_script import generate_fiyat_farki_raporu
-                generate_fiyat_farki_raporu(run_output_dir)
+                generate_fiyat_farki_raporu(run_output_dir, input_files.get("discount"))
                 out_kiyas = os.path.join(run_output_dir, "Indirim_Uygulanmayan_Fiyat_Kiyas_Raporu.xlsx")
                 if os.path.exists(out_kiyas):
                     fix_xlsx_for_trendyol(out_kiyas)

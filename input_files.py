@@ -11,7 +11,7 @@ import pandas as pd
 INPUT_SPECS = {
     "discount": {
         "label": "İndirim Uygulanabilecek Ürünler",
-        "required": False,
+        "required": True,
         "filename": "discount.xlsx",
         "columns": {"BARKOD", "Eski Fiyat", "YENİ Fiyat"},
     },

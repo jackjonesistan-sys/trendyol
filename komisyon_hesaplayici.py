@@ -59,14 +59,22 @@ def get_commission_rate(price, row):
         return None
 
 
+def fallback_candidate_is_selectable(current_net, candidate_net, used_current_price):
+    return not used_current_price or (
+        current_net is not None
+        and candidate_net is not None
+        and candidate_net > current_net
+    )
+
+
 def selectable_campaigns(current_net, candidates):
     return [
         candidate
         for candidate in candidates
-        if not (
-            len(candidate) > 4
-            and candidate[4]
-            and (current_net is None or candidate[1] <= current_net)
+        if fallback_candidate_is_selectable(
+            current_net,
+            candidate[1],
+            len(candidate) > 4 and candidate[4],
         )
     ]
 
@@ -79,13 +87,8 @@ def choose_campaigns_smart(current_net, candidates):
     """
     candidates: (campaign_key, net_price, eff_price, rate, used_current_price=False, is_muhasebe=False)
     
-    Önerilen Kampanya (Ana):
-      Dip fiyatı geçebilen Ana kampanyalar ('Avantajlı', 'Flaş', 'Plus') arasından 
-      fiyatı dip fiyata en yakın olanı seçilir.
-      
-    Önerilen Ekstra Kampanya:
-      Dip fiyatı geçebilen Ekstra kampanyalar (Karşılamalı veya Plus Ek İndirim) arasından 
-      fiyatı dip fiyata en yakın olanı seçilir.
+    Ana ve ekstra kampanyaları ayrı ayrı en yüksek kalan nete göre seçer.
+    Net eşitse yüksek fiyat, o da eşitse kampanya adı belirleyicidir.
     """
     selectable = selectable_campaigns(current_net, candidates)
     if not selectable:
@@ -93,13 +96,13 @@ def choose_campaigns_smart(current_net, candidates):
 
     main_selectable = [c for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
     if main_selectable:
-        best_main = min(main_selectable, key=lambda x: (x[2], -x[1]))[0]
+        best_main = min(main_selectable, key=lambda x: (-x[1], -x[2], x[0]))[0]
     else:
         best_main = 'Hiçbiri'
 
     extra_selectable = [c for c in selectable if c[0] not in MAIN_CAMPAIGN_KEYS]
     if extra_selectable:
-        best_extra = min(extra_selectable, key=lambda x: (x[2], -x[1]))[0]
+        best_extra = min(extra_selectable, key=lambda x: (-x[1], -x[2], x[0]))[0]
     else:
         best_extra = 'Hiçbiri'
 
@@ -149,7 +152,7 @@ def build_discount_fields(is_eligible, current_price, dip_price, market_price):
 
 
 def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None):
-    required = ('commission', 'current')
+    required = ('discount', 'commission', 'current')
     missing = [key for key in required if not input_files.get(key)]
     if missing:
         return {"success": False, "message": "Zorunlu girdi dosyaları eksik."}
@@ -385,7 +388,11 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         av_dip = None
         av_dip_source = None
         if muh_av_row is not None:
-            for col_name in ['YENİ TSF (FİYAT GÜNCELLE)', '1 YILDIZ ÜST FİYAT']:
+            for col_name in [
+                'YENİ TSF (FİYAT GÜNCELLE)',
+                '1 YILDIZ ÜST FİYAT',
+                'TRENDYOL SATIŞ FİYATI',
+            ]:
                 if col_name in muh_av_row:
                     val = to_float(muh_av_row[col_name])
                     if val and val > 0: 
@@ -428,10 +435,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         av_threshold = min([d for d in [common_dip, av_dip] if d is not None], default=None)
         flas_threshold = min([d for d in [common_dip, flas_dip] if d is not None], default=None)
         plus_threshold = min([d for d in [common_dip, plus_dip] if d is not None], default=None)
-        common_threshold = common_dip
 
         all_dips = [d['price'] for d in dip_details]
         min_dip_val = min(all_dips) if all_dips else None
+        common_threshold = min_dip_val
 
         # Ürünün katılabileceği kampanyaların tespiti (eligible_campaigns)
         eligible_campaigns = ['Hiçbiri']
@@ -466,7 +473,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if rate_2 is not None:
                     net_2 = round(yeni_tsf - (yeni_tsf * (rate_2 / 100.0)), 2)
 
-                if av_threshold is None or yeni_tsf >= av_threshold - 0.01:
+                if (
+                    (av_threshold is not None or yeni_tsf_is_fallback)
+                    and (av_threshold is None or yeni_tsf >= av_threshold - 0.01)
+                ):
                     eligible_campaigns.append('Avantajlı')
                     if net_2 is not None:
                         smart_candidates.append(('Avantajlı', net_2, yeni_tsf, rate_2, yeni_tsf_is_fallback, muh_av_row is not None))
@@ -500,7 +510,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if rate_3 is not None:
                     net_3 = round(f_24_fiyat - (f_24_fiyat * (rate_3 / 100.0)), 2)
 
-                if flas_threshold is None or f_24_fiyat >= flas_threshold - 0.01:
+                if (
+                    (flas_threshold is not None or f_24_fiyat_is_fallback)
+                    and (flas_threshold is None or f_24_fiyat >= flas_threshold - 0.01)
+                ):
                     eligible_campaigns.append('Flaş')
                     if net_3 is not None:
                         smart_candidates.append(('Flaş', net_3, f_24_fiyat, rate_3, f_24_fiyat_is_fallback, muh_flas_row is not None))
@@ -536,7 +549,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if rate_4 is not None:
                     net_4 = round(plus_fiyat - (plus_fiyat * (rate_4 / 100.0)), 2)
 
-                if plus_threshold is None or plus_fiyat >= plus_threshold - 0.01:
+                if (
+                    (plus_threshold is not None or plus_fiyat_is_fallback)
+                    and (plus_threshold is None or plus_fiyat >= plus_threshold - 0.01)
+                ):
                     eligible_campaigns.append('Plus')
                     if net_4 is not None:
                         smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
@@ -614,6 +630,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
 
         # 5. Karşılamalı Kampanyalar (Çoklu)
         counter_evaluations = {}
+        minimum_qualified_labels = set()
         for c_item in counter_items:
             c_dict = c_item['dict']
             c_row = c_dict.get(b)
@@ -628,8 +645,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     c_price = guncel_fiyat_calc
                     c_price_is_fallback = True
                 
-                # Minimum tutar kontrolü (örn: 300 TL üzeri)
-                if c_price and c_price > 0:
+                if c_price and c_price >= c_item['min_price'] - 0.01:
+                    minimum_qualified_labels.add(c_item['label'])
                     eligible_campaigns.append(c_item['label'])
                     if common_threshold is None or c_price >= common_threshold - 0.01:
                         c_rate = get_commission_rate(c_price, kom_row) if kom_row else None
@@ -672,7 +689,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         cp_price = guncel_fiyat_calc
                         cp_price_is_fallback = True
                     
-                    if cp_price and cp_price > 0:
+                    if cp_price and cp_price >= cp_item['min_price'] - 0.01:
+                        minimum_qualified_labels.add(cp_item['label'])
                         eligible_campaigns.append(cp_item['label'])
                         if common_threshold is None or cp_price >= common_threshold - 0.01:
                             cp_rate = get_commission_rate(cp_price, kom_row) if kom_row else None
@@ -699,17 +717,32 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         selectable = selectable_campaigns(net_1, smart_candidates)
 
         all_matching_main_campaigns = ['Hiçbiri']
-        if match_av and yeni_tsf and (not yeni_tsf_is_fallback or (net_2 is not None and net_2 > net_1)):
+        if (
+            match_av
+            and yeni_tsf
+            and (av_threshold is not None or yeni_tsf_is_fallback)
+            and fallback_candidate_is_selectable(net_1, net_2, yeni_tsf_is_fallback)
+        ):
             if 'Avantajlı' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Avantajlı')
-        if match_fl and f_24_fiyat and (not f_24_fiyat_is_fallback or (net_3 is not None and net_3 > net_1)):
+        if (
+            match_fl
+            and f_24_fiyat
+            and (flas_threshold is not None or f_24_fiyat_is_fallback)
+            and fallback_candidate_is_selectable(net_1, net_3, f_24_fiyat_is_fallback)
+        ):
             if 'Flaş' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Flaş')
-        if match_plus and plus_fiyat and (not plus_fiyat_is_fallback or (net_4 is not None and net_4 > net_1)):
+        if (
+            match_plus
+            and plus_fiyat
+            and (plus_threshold is not None or plus_fiyat_is_fallback)
+            and fallback_candidate_is_selectable(net_1, net_4, plus_fiyat_is_fallback)
+        ):
             if 'Plus' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Plus')
 
         eligible_main_campaigns = ['Hiçbiri'] + [c[0] for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
 
         all_matching_extra_campaigns = ['Hiçbiri']
-        if match_plus_ek and plus_ek_fiyat and (not plus_ek_fiyat_is_fallback or (net_5 is not None and net_5 > net_1)):
+        if match_plus_ek and plus_ek_fiyat and fallback_candidate_is_selectable(net_1, net_5, plus_ek_fiyat_is_fallback):
             for c_name in ('Plus Ek İndirim %5', 'Plus Ek İndirim %10', 'Plus Ek İndirim %20'):
                 if c_name not in all_matching_extra_campaigns:
                     all_matching_extra_campaigns.append(c_name)
@@ -720,11 +753,11 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         all_matching_extra_campaigns.append(pe_item['label'])
         if coupon_items:
             for cp_item in coupon_items:
-                if cp_item['dict'].get(b) is not None:
+                if cp_item['dict'].get(b) is not None and cp_item['label'] in minimum_qualified_labels:
                     if cp_item['label'] not in all_matching_extra_campaigns:
                         all_matching_extra_campaigns.append(cp_item['label'])
         for c_item in counter_items:
-            if c_item['dict'].get(b) is not None:
+            if c_item['dict'].get(b) is not None and c_item['label'] in minimum_qualified_labels:
                 if c_item['label'] not in all_matching_extra_campaigns:
                     all_matching_extra_campaigns.append(c_item['label'])
 

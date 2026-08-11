@@ -5,8 +5,11 @@ import types
 import unittest
 from pathlib import Path
 
+import pandas as pd
 
-if "flask" not in sys.modules:
+try:
+    import flask  # noqa: F401
+except ImportError:
     flask_stub = types.ModuleType("flask")
 
     class FlaskStub:
@@ -122,6 +125,8 @@ class ReportingTests(unittest.TestCase):
         self.assertFalse(
             app.campaign_selection_is_applicable("Flaş", "Avantajlı, Plus")
         )
+        coupon = "500 TL Üzerine 50 TL Kupon - Trendyol Plus Müşterilerine Özel"
+        self.assertTrue(app.campaign_selection_is_applicable(coupon, coupon))
 
     def test_excel_persisted_campaign_collections_restore_their_types(self):
         self.assertEqual(
@@ -158,6 +163,31 @@ class ReportingTests(unittest.TestCase):
                 self.assertFalse(app.calculation_result_is_current())
             finally:
                 app.F_HESAP = old_result
+
+    def test_price_difference_report_does_not_crash_on_unrelated_indirim_file(self):
+        from fiyat_farki_analiz_script import generate_fiyat_farki_raporu
+
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "Girdiler").mkdir()
+            out = root / "out"
+            out.mkdir()
+            pd.DataFrame([{"Barkod": "A1", "Başka Kolon": 1}]).to_excel(
+                root / "Girdiler" / "yanlis-indirim.xlsx", index=False
+            )
+            pd.DataFrame([{
+                "Barkod": "A1",
+                "Güncel Ürün Fiyatı (TL)": 100,
+                "Avantajlı Ürün Fiyatı (YENİ TSF) (TL)": 90,
+            }]).to_excel(out / "Uygulanmayan_Urunler_Raporu.xlsx", index=False)
+            os.chdir(root)
+            try:
+                generate_fiyat_farki_raporu(out)
+            finally:
+                os.chdir(cwd)
+
+            self.assertTrue((out / "Indirim_Uygulanmayan_Fiyat_Kiyas_Raporu.xlsx").exists())
 
 
 if __name__ == "__main__":
