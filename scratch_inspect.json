@@ -1,0 +1,146 @@
+{
+  "sheetnames": [
+    "Ürünler",
+    "Detaylar"
+  ],
+  "sheets": {
+    "Ürünler": {
+      "max_row": 417,
+      "max_col": 9,
+      "sample_rows": [
+        [
+          "Trendyol Ürün ID",
+          "Ürün Bilgisi",
+          "Marka",
+          "Renk",
+          "Barkod",
+          "Model Kodu",
+          "Güncel Satış Fiyatı",
+          "Buybox",
+          "Kampayaya Dahil Edilsin Mi?"
+        ],
+        [
+          780287428,
+          "Toz Ve Nem Alıcı Paspas Iş Yeri Paspası Iç Ve Dış Mekan Paspası Giriş Paspası Kapı Paspası",
+          "Paspas Yap",
+          "Kırmızı",
+          "TOZKONTROL-IYP2-RAMPASIZ-KIRMIZI-60x120",
+          "TOZKONTROL-IYP2-RAMPASIZ",
+          "1264 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          782277007,
+          "Asansör Ve Apartman Paspası Toz Ve Nem Alıcı Iç Ve Dış Mekan Kapı Önü Paspası",
+          "Paspas Yap",
+          "Gri",
+          "TOZKONTROL-RAMPASIZ-AP1-GRI-150x150",
+          "TOZKONTROL-RAMPASIZ-AP1",
+          "3309 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          782283578,
+          "Asansör Ve Apartman Paspası Toz Ve Nem Alıcı Iç Ve Dış Mekan Kapı Önü Paspası",
+          "Paspas Yap",
+          "Kırmızı",
+          "TOZKONTROL-RAMPASIZ-AP1-KIRMIZI-120x150",
+          "TOZKONTROL-RAMPASIZ-AP1",
+          "2665 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          782286303,
+          "Asansör Ve Apartman Paspası Toz Ve Nem Alıcı Iç Ve Dış Mekan Kapı Önü Paspası",
+          "Paspas Yap",
+          "Siyah",
+          "TOZKONTROL-RAMPASIZ-AP1-SIYAH-120x150",
+          "TOZKONTROL-RAMPASIZ-AP1",
+          "2665 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          794083607,
+          "Toz Kir Ve Nem Alıcı Paspas Araç Paspası Otobüs Servis Ve Oto Paspas Araç Içi Paspas",
+          "Paspas Yap",
+          "Gri",
+          "TOZKONTROL-GRI-RAMPASIZ-50x500",
+          "SO1",
+          "3609 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          794083905,
+          "Toz Kir Ve Nem Alıcı Paspas Araç Paspası Otobüs Servis Ve Oto Paspas Araç Içi Paspas",
+          "Paspas Yap",
+          "Kırmızı",
+          "TOZKONTROL-KIRMIZI-RAMPASIZ-50x700",
+          "SO1",
+          "4904 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          794083917,
+          "Toz Kir Ve Nem Alıcı Paspas Araç Paspası Otobüs Servis Ve Oto Paspas Araç Içi Paspas",
+          "Paspas Yap",
+          "Siyah",
+          "TOZKONTROL-SIYAH-RAMPASIZ-50x400",
+          "SO1",
+          "2886 ₺",
+          "Kaybeden",
+          "Hayır"
+        ],
+        [
+          795608368,
+          "Lütfen Sonra Gelin Kedili Esprili Kapı Önü Paspası Koko Paspas Kıl Paspas Yazılı Paspas",
+          "Paspas Yap",
+          "Standart",
+          "ST200-KOKO-50x90",
+          "ST200",
+          "2199 ₺",
+          "Kaybeden",
+          "Hayır"
+        ]
+      ]
+    },
+    "Detaylar": {
+      "max_row": 13,
+      "max_col": 1,
+      "sample_rows": [
+        [
+          "Detaylar"
+        ],
+        [
+          "\"ÜRÜNLERİ EXCELE İNDİR\"e tıklayarak indirdiğiniz bu Excel'de kampanyaya ekleyeceğiniz ürünleri seçin, ekrandaki \"EXCEL YÜKLE\" butonuna tıklayarak seçtiğiniz ürünleri yükleyin."
+        ],
+        [
+          "Eklemek istediğiniz ürünler için son sütunda yer alan \"Kampanyaya dahil edilsin mi?\" alanını \"Evet\" olarak güncellemelisiniz."
+        ],
+        [
+          "Excel'de maksimum 500 ürün seçebilirsiniz, 500'den fazla ürün seçtiğiniz durumda ilk 500 ürün kampanyaya eklenecektir."
+        ],
+        [
+          "Yükleme işlemi gerçekleştikten sonra \"Yükleme Sonucu\" alanından durumunuzu sorgulayabilirsiniz, başarıyla yüklediğiniz ürünlerin karşısında \"Başarılı\" ifadesi yer alacaktır."
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          "Önemli Uyarılar"
+        ],
+        [
+          "1) Kampanyaya eklediğiniz barkoddaki ürünün farklı varyantları varsa, oluşturduğunuz kampanya ürünün tüm varyantlarına uygulanacaktır."
+        ]
+      ]
+    }
+  }
+}

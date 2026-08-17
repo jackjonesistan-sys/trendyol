@@ -97,6 +97,12 @@ INPUT_SPECS = {
         "filename": "muhasebe_plus.xlsx",
         "columns": {"Barkod", "Plus Fiyat Üst Limiti"},
     },
+    "net_discount": {
+        "label": "Net İndirim (İndirim Oluştur Şablonu)",
+        "required": False,
+        "filename": "net_discount.xlsx",
+        "columns": {"Barkod"},
+    },
 }
 
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
@@ -190,6 +196,7 @@ CAMPAIGN_NAMES = {
     "counter": "Karşılamalı Kampanya",
     "plus_extra": "Plus Ek İndirim",
     "coupon": "Kupon",
+    "net_discount": "Net İndirim",
 }
 
 
@@ -219,24 +226,37 @@ def normalize_campaign_config(config, campaign_type):
         and "discount_amount" not in config
         and "rate" in config
     )
-    discount_type = config.get("discount_type") or config.get("discount_unit")
+    discount_type = config.get("discount_type") or config.get("discount_unit") or config.get("type")
     if discount_type is None:
-        discount_type = "%" if campaign_type == "plus_extra" else "TL"
+        discount_type = "%" if campaign_type in {"plus_extra", "net_discount"} else "TL"
     discount_type = str(discount_type).strip()
     if discount_type not in {"TL", "%"}:
         raise InputValidationError(
             f"{campaign_name} indirim tipi yalnızca TL veya % olabilir."
         )
 
-    min_price = _campaign_number(config.get("min_price", 0), "alt limiti", campaign_name)
+    min_price_val = config.get("min_price") if "min_price" in config else config.get("min_cart_amount", 0)
+    min_price = _campaign_number(min_price_val, "alt limiti", campaign_name)
+    raw_amount = (
+        config.get("rate", 0)
+        if legacy_plus
+        else (config.get("discount_amount") if "discount_amount" in config else config.get("amount", 0))
+    )
     discount_amount = _campaign_number(
-        config.get("rate", 0) if legacy_plus else config.get("discount_amount", 0),
+        raw_amount,
         "indirim tutarı",
         campaign_name,
     )
     trendyol_percent = _campaign_number(
         config.get("trendyol_percent", 0), "Trendyol katkı oranı", campaign_name
     )
+    if campaign_type == "net_discount":
+        min_basket_val = config.get("min_basket_price") if "min_basket_price" in config else config.get("min_cart_amount", 0)
+        min_basket_price = _campaign_number(min_basket_val, "minimum sepet tutarı", campaign_name)
+        order_limit = _campaign_number(config.get("order_limit", 0), "sipariş adedi limiti", campaign_name)
+        min_price = min_basket_price
+        trendyol_percent = 0.0
+
     if min_price < 0:
         raise InputValidationError(f"{campaign_name} alt limiti negatif olamaz.")
     if discount_amount < 0:
@@ -257,6 +277,9 @@ def normalize_campaign_config(config, campaign_type):
         "discount_type": discount_type,
         "trendyol_percent": trendyol_percent,
     }
+    if campaign_type == "net_discount":
+        normalized["min_basket_price"] = min_basket_price
+        normalized["order_limit"] = order_limit
     if campaign_type == "plus_extra" and discount_type == "%":
         normalized["rate"] = discount_amount
     return normalized
@@ -273,7 +296,14 @@ def _format_campaign_number(value):
     return str(int(number)) if number.is_integer() else str(number)
 
 
-def build_campaign_label(config, campaign_type, index=0):
+def build_campaign_label(config_or_type, campaign_type_or_config, index=0):
+    if isinstance(config_or_type, str) and isinstance(campaign_type_or_config, dict):
+        campaign_type = config_or_type
+        config = campaign_type_or_config
+    else:
+        config = config_or_type
+        campaign_type = campaign_type_or_config
+
     config = normalize_campaign_config(config, campaign_type)
     explicit_label = config.get("label")
     if isinstance(explicit_label, str) and explicit_label.strip():
@@ -288,6 +318,13 @@ def build_campaign_label(config, campaign_type, index=0):
         else f"{discount} TL İndirim"
     )
     trendyol_part = f"%{trendyol} Trendyol Karşılamalı"
+
+    if campaign_type == "net_discount":
+        return (
+            f"%{discount} Net İndirim"
+            if config["discount_type"] == "%"
+            else f"{discount} TL Net İndirim"
+        )
 
     if campaign_type == "plus_extra":
         if (
@@ -699,4 +736,31 @@ def save_user_selections(manifest_path, selections_dict):
         manifest_path,
         lambda manifest: {**manifest, "user_selections": selections},
     )
+
+
+def save_net_discount_config(manifest_path, net_discount_config):
+    if not isinstance(net_discount_config, dict):
+        net_discount_config = {}
+    normalized = normalize_campaign_config(net_discount_config, "net_discount") if net_discount_config else {}
+    _mutate_manifest_atomic(
+        manifest_path,
+        lambda manifest: {**manifest, "net_discount_config": normalized},
+    )
+
+
+def load_net_discount_config(manifest_path):
+    manifest_path = Path(manifest_path)
+    manifest = _read_manifest(manifest_path)
+    config = manifest.get("net_discount_config") or manifest.get("campaign_configs", {}).get("net_discount")
+    if not config or not isinstance(config, dict):
+        nd_file = manifest.get("files", {}).get("net_discount")
+        if nd_file and isinstance(nd_file, dict):
+            config = {"stored_path": nd_file.get("stored_path"), "enabled": True}
+        else:
+            return {}
+    path = config.get("path") or config.get("stored_path") or manifest.get("files", {}).get("net_discount", {}).get("stored_path")
+    if path and not os.path.exists(path):
+        return {}
+    return normalize_campaign_config({**config, "stored_path": path or config.get("stored_path")}, "net_discount")
+
 

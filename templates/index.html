@@ -508,6 +508,37 @@
                             </div>
                         </div>
                     </div>
+
+                <!-- Tek Dosya / Şablon Yükleme Alanı: Net İndirim (İndirim Oluştur Şablonu) -->
+                <div class="pt-4 border-t border-base-200">
+                    <div class="bg-base-200/60 p-4 rounded-2xl border border-base-300/60 space-y-3">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <div
+                                    class="w-8 h-8 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center font-bold text-sm">
+                                    🏷️
+                                </div>
+                                <div>
+                                    <h3 class="text-xs md:text-sm font-bold text-base-content">Net İndirim (İndirim Oluştur Şablonu)</h3>
+                                    <p class="text-[11px] text-base-content/60">İndiriminize uygulanacak koşulları giriniz. Seçtiğiniz ürünler şablonda 'Evet' yapılarak çıktısı alınır.</p>
+                                </div>
+                            </div>
+                            <label
+                                class="btn btn-secondary btn-xs text-white font-semibold cursor-pointer shadow-2xs px-3 rounded-lg">
+                                + Net İndirim Şablonu Yükle
+                                <input id="input_net_discount" type="file" accept=".xlsx" class="hidden"
+                                    onchange="handleNetDiscountUpload(this.files)">
+                            </label>
+                        </div>
+
+                        <div id="netDiscountContainer" class="space-y-3 pt-1">
+                            <div
+                                class="text-xs text-base-content/50 italic bg-base-100/60 p-4 rounded-xl border border-dashed border-base-300 text-center">
+                                Henüz Net İndirim şablonu yüklenmedi.
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -667,6 +698,10 @@
                                         onclick="applyCampaigns('Karşılamalı Kampanya'); if(document.activeElement) document.activeElement.blur();"
                                         class="hover:bg-base-200 py-2.5 text-left w-full rounded-lg">Sadece Karşılamalı
                                         Kampanya Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Net İndirim'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-base-200 py-2.5 text-left w-full rounded-lg">Sadece Net
+                                        İndirim Oluştur</button></li>
                             </ul>
                         </div>
                     </div>
@@ -780,6 +815,7 @@
     <script id="counter-configs-data" type="application/json">{{ counter_configs | tojson | safe if counter_configs is defined else '[]' }}</script>
     <script id="plus-extra-configs-data" type="application/json">{{ plus_extra_configs | tojson | safe if plus_extra_configs is defined else '[]' }}</script>
     <script id="coupon-configs-data" type="application/json">{{ coupon_configs | tojson | safe if coupon_configs is defined else '[]' }}</script>
+    <script id="net-discount-config-data" type="application/json">{{ net_discount_config | tojson | safe if net_discount_config is defined else 'null' }}</script>
     <script id="recommendation-rule-data" type="application/json">{% if recommendation_rule is defined %}{{ recommendation_rule | tojson }}{% else %}{"enabled": true, "priority": ["Avantajlı", "Flaş", "Plus"]}{% endif %}</script>
 
     <script>
@@ -946,6 +982,9 @@
 
         function optionIsEligible(row, key, value) {
             if (!value || value === 'Hiçbiri') return true;
+            if (key === 'eligible_extra_campaigns' && typeof value === 'string' && value.endsWith('Net İndirim')) {
+                if (netDiscountConfigState && netDiscountConfigState.enabled !== false) return true;
+            }
             const options = row[key];
             if (!Array.isArray(options)) return true;
             return options.includes(value);
@@ -1029,6 +1068,27 @@
                 const finalPrice = round2(evaluationBasePrice - totalDiscount);
                 const finalNet = round2(evaluationBasePrice - (evaluationBasePrice * (evaluationRate / 100)) - sellerDisc);
                 return [finalPrice, finalNet, evaluationRate];
+            }
+
+            if (typeof extraSel === 'string' && extraSel.endsWith('Net İndirim')) {
+                let discType = '%';
+                let discVal = 0;
+                if (netDiscountConfigState && dynamicCampaignLabel('net_discount', netDiscountConfigState) === extraSel) {
+                    discType = netDiscountConfigState.discount_type || '%';
+                    discVal = asNumber(netDiscountConfigState.discount_amount) ?? 0;
+                } else if (extraSel.startsWith('%')) {
+                    discType = '%';
+                    discVal = parseFloat(extraSel.replace('%', '').replace('Net İndirim', '').trim()) || 0;
+                } else {
+                    discType = 'TL';
+                    discVal = parseFloat(extraSel.replace('TL', '').replace('Net İndirim', '').trim()) || 0;
+                }
+                if (basePrice === null) return [basePrice, baseNet, baseComm];
+                const totalDiscount = discType === '%' ? round2(basePrice * (discVal / 100)) : discVal;
+                const finalPrice = round2(basePrice - totalDiscount);
+                const commRate = baseComm ?? 0;
+                const finalNet = round2(basePrice - (basePrice * (commRate / 100)) - totalDiscount);
+                return [finalPrice, finalNet, commRate];
             }
 
             if (typeof extraSel === 'string' && extraSel.startsWith('Plus Ek İndirim %')) {
@@ -1247,7 +1307,7 @@
                 return;
             }
             const formData = new FormData();
-            document.querySelectorAll('input[id^="input_"][type="file"]:not(#input_counter_multi):not(#input_plus_extra_multi):not(#input_coupon_multi)').forEach(input => {
+            document.querySelectorAll('input[id^="input_"][type="file"]:not(#input_counter_multi):not(#input_plus_extra_multi):not(#input_coupon_multi):not(#input_net_discount)').forEach(input => {
                 if (input.files.length) formData.append(input.id.slice(6), input.files[0]);
             });
 
@@ -1307,6 +1367,24 @@
                 });
             });
             formData.append('coupon_configs_json', JSON.stringify(couponConfigs));
+
+            if (netDiscountConfigState && netDiscountConfigState.enabled !== false) {
+                if (netDiscountConfigState.fileObj) {
+                    formData.append('net_discount_file', netDiscountConfigState.fileObj);
+                }
+                const netDiscountConfig = {
+                    id: netDiscountConfigState.id,
+                    filename: netDiscountConfigState.filename,
+                    label: dynamicCampaignLabel('net_discount', netDiscountConfigState),
+                    discount_type: netDiscountConfigState.discount_type || '%',
+                    discount_amount: netDiscountConfigState.discount_amount || 0,
+                    min_basket_price: netDiscountConfigState.min_basket_price || 0,
+                    order_limit: netDiscountConfigState.order_limit || 0,
+                    expiry_date: netDiscountConfigState.expiry_date || '',
+                    enabled: netDiscountConfigState.enabled !== false
+                };
+                formData.append('net_discount_config_json', JSON.stringify(netDiscountConfig));
+            }
             formData.append('recommendation_rule_json', JSON.stringify(recommendationRule));
 
             const singleExpiries = {};
@@ -1549,6 +1627,7 @@
         const initialCounterConfigs = JSON.parse(document.getElementById('counter-configs-data')?.textContent || '[]');
         const initialPlusExtraConfigs = JSON.parse(document.getElementById('plus-extra-configs-data')?.textContent || '[]');
         const initialCouponConfigs = JSON.parse(document.getElementById('coupon-configs-data')?.textContent || '[]');
+        const initialNetDiscountConfig = JSON.parse(document.getElementById('net-discount-config-data')?.textContent || 'null');
 
         let counterFilesState = Array.isArray(initialCounterConfigs) ? initialCounterConfigs.map(item => ({
             id: item.id || ('counter_' + Math.random().toString(36).substr(2, 9)),
@@ -1592,42 +1671,61 @@
             fileObj: null
         })) : [];
 
+        let netDiscountConfigState = (initialNetDiscountConfig && typeof initialNetDiscountConfig === 'object' && Object.keys(initialNetDiscountConfig).length > 0) ? {
+            id: initialNetDiscountConfig.id || 'net_discount_1',
+            filename: initialNetDiscountConfig.filename || initialNetDiscountConfig.original_name || 'Ürünler.xlsx',
+            label: initialNetDiscountConfig.label || '',
+            discount_type: initialNetDiscountConfig.discount_type || '%',
+            discount_amount: parseFloat(initialNetDiscountConfig.discount_amount) || 0,
+            min_basket_price: parseFloat(initialNetDiscountConfig.min_basket_price ?? initialNetDiscountConfig.min_price) || 0,
+            order_limit: parseInt(initialNetDiscountConfig.order_limit) || 0,
+            expiry_date: initialNetDiscountConfig.expiry_date || '',
+            enabled: initialNetDiscountConfig.enabled !== false,
+            path: initialNetDiscountConfig.path || initialNetDiscountConfig.stored_path || '',
+            fileObj: null
+        } : null;
+
         function configNumber(value) {
             const number = parseFloat(value) || 0;
             return Number.isInteger(number) ? parseInt(number, 10) : number;
         }
 
         function dynamicCampaignLabel(type, item, index) {
-            const minPrice = configNumber(item.min_price);
-            const discount = configNumber(item.discount_amount ?? item.rate);
-            const discountType = item.discount_type === 'TL' ? 'TL' : '%';
-            const trendyolPercent = configNumber(item.trendyol_percent);
+            const minPrice = configNumber(item?.min_price ?? item?.min_basket_price);
+            const discount = configNumber(item?.discount_amount ?? item?.rate);
+            const discountType = (item?.discount_type === 'TL' || item?.discount_unit === 'TL') ? 'TL' : '%';
+            const trendyolPercent = configNumber(item?.trendyol_percent);
             const discountPart = discountType === '%' ? `%${discount} İndirim` : `${discount} TL İndirim`;
             const trendyolPart = trendyolPercent > 0 ? ` / %${trendyolPercent} Trendyol Karşılamalı` : '';
 
+            if (type === 'net_discount') {
+                const discPart = discountType === '%' ? `%${discount} Net İndirim` : `${discount} TL Net İndirim`;
+                return discPart;
+            }
             if (type === 'plus_extra') {
                 if (minPrice <= 0 && discountType === '%' && trendyolPercent <= 0 && discount > 0) {
                     return `Plus Ek İndirim %${discount}`;
                 }
                 return (minPrice > 0 || discount > 0)
                     ? `Plus Ek İndirim (${minPrice} TL Üzeri / ${discountPart}${trendyolPart})`
-                    : (item.label || `Plus Ek İndirim #${index + 1}`);
+                    : (item?.label || `Plus Ek İndirim #${(index || 0) + 1}`);
             }
             if (type === 'coupon') {
                 const couponPart = discountType === '%' ? `%${discount} Kupon` : `${discount} TL Kupon`;
                 return (minPrice > 0 || discount > 0)
                     ? `${minPrice} TL Üzerine ${couponPart}${trendyolPart} - Trendyol Plus Müşterilerine Özel`
-                    : (item.label || `Kupon #${index + 1}`);
+                    : (item?.label || `Kupon #${(index || 0) + 1}`);
             }
             return (minPrice > 0 || discount > 0)
                 ? `Karşılamalı (${minPrice} TL Üzeri / ${discountPart}${trendyolPart})`
-                : (item.label || `Karşılamalı #${index + 1}`);
+                : (item?.label || `Karşılamalı #${(index || 0) + 1}`);
         }
 
         $(document).ready(function () {
             renderCounterCards();
             renderPlusExtraCards();
             renderCouponCards();
+            renderNetDiscountCard();
             updateBulkCampaignOptions();
             setTimeout(renderSingleExpiryBadges, 100);
         });
@@ -2151,6 +2249,151 @@
             if (mTr) trP = parseFloat(mTr[1].replace(',', '.')) || 0;
             return { min_price: minP, discount_amount: disc, discount_type: mPercent ? '%' : 'TL', trendyol_percent: trP };
         }
+        function handleNetDiscountUpload(files) {
+            if (!files || !files.length) return;
+            const file = files[0];
+            if (!file.name.toLowerCase().endsWith('.xlsx')) return;
+            if (!netDiscountConfigState) {
+                netDiscountConfigState = {
+                    id: 'net_discount_1',
+                    filename: file.name,
+                    label: '',
+                    discount_type: '%',
+                    discount_amount: 0,
+                    min_basket_price: 0,
+                    order_limit: 0,
+                    expiry_date: '',
+                    enabled: true,
+                    path: '',
+                    fileObj: file
+                };
+            } else {
+                netDiscountConfigState.filename = file.name;
+                netDiscountConfigState.fileObj = file;
+            }
+            renderNetDiscountCard();
+            updateBulkCampaignOptions();
+        }
+
+        function removeNetDiscountFile() {
+            netDiscountConfigState = null;
+            renderNetDiscountCard();
+            updateBulkCampaignOptions();
+            fetch('/api/remove-net-discount-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).catch(function () { });
+        }
+
+        function toggleNetDiscountEnabled(isEnabled) {
+            if (netDiscountConfigState) {
+                netDiscountConfigState.enabled = isEnabled;
+                renderNetDiscountCard();
+                updateBulkCampaignOptions();
+                fetch('/api/toggle-campaign-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'net_discount', id: netDiscountConfigState.id, enabled: isEnabled })
+                }).catch(function () { });
+            }
+        }
+
+        function updateNetDiscountParam(key, val) {
+            if (!netDiscountConfigState) return;
+            if (key === 'expiry_date') {
+                netDiscountConfigState[key] = val;
+                const el = document.getElementById('badge_net_discount');
+                if (el) el.innerHTML = getTimeRemainingBadge(val);
+                fetch('/api/save-expiry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ net_discount_expiry: val })
+                }).catch(function () { });
+            } else if (key === 'discount_type') {
+                netDiscountConfigState[key] = val;
+                renderNetDiscountCard();
+            } else if (key === 'discount_amount' || key === 'min_basket_price') {
+                netDiscountConfigState[key] = parseFloat(val) || 0;
+            } else if (key === 'order_limit') {
+                netDiscountConfigState[key] = parseInt(val) || 0;
+            } else {
+                netDiscountConfigState[key] = val;
+            }
+            updateBulkCampaignOptions();
+        }
+
+        function renderNetDiscountCard() {
+            const container = $('#netDiscountContainer');
+            container.empty();
+            if (!netDiscountConfigState) {
+                container.html('<div class="text-xs text-base-content/50 italic bg-base-100/60 p-4 rounded-xl border border-dashed border-base-300 text-center">Henüz Net İndirim şablonu (Ürünler.xlsx) yüklenmedi.</div>');
+                return;
+            }
+            const item = netDiscountConfigState;
+            const badgeHtml = getTimeRemainingBadge(item.expiry_date);
+            const isEnabled = item.enabled !== false;
+            const isPct = item.discount_type === '%';
+            const cardHtml = `
+                <div class="bg-base-100 rounded-xl p-3.5 border border-base-300 shadow-2xs space-y-3 ${!isEnabled ? 'opacity-55 grayscale-[30%] bg-base-200/40' : ''}">
+                    <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-base-200">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full ${isEnabled ? 'bg-secondary' : 'bg-base-300'}"></span>
+                            <span class="font-bold text-xs ${isEnabled ? 'text-base-content' : 'text-base-content/50 line-through'}">
+                                ${escapeHtml(item.filename || 'Ürünler.xlsx')}
+                            </span>
+                            <span id="badge_net_discount">${badgeHtml}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="cursor-pointer flex items-center gap-1.5 bg-base-200/80 px-2 py-0.5 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+                                <input type="checkbox" class="checkbox checkbox-xs checkbox-success" ${isEnabled ? 'checked' : ''} onchange="toggleNetDiscountEnabled(this.checked)">
+                                <span class="text-[11px] font-bold ${isEnabled ? 'text-success' : 'text-base-content/40'}">${isEnabled ? 'Aktif' : 'Pasif'}</span>
+                            </label>
+                            <button type="button" class="btn btn-ghost btn-xs text-error font-medium" onclick="removeNetDiscountFile()">Kaldır</button>
+                        </div>
+                    </div>
+
+                    <!-- İndirim Koşulları Formu -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-4">
+                            <span class="text-[11px] font-bold text-base-content">İndirim Tipi:</span>
+                            <label class="cursor-pointer flex items-center gap-1.5 text-xs">
+                                <input type="radio" name="net_discount_type_radio" class="radio radio-xs radio-secondary" ${isPct ? 'checked' : ''} onchange="updateNetDiscountParam('discount_type', '%')">
+                                <span class="font-medium text-xs">%X İndirim</span>
+                            </label>
+                            <label class="cursor-pointer flex items-center gap-1.5 text-xs">
+                                <input type="radio" name="net_discount_type_radio" class="radio radio-xs radio-secondary" ${!isPct ? 'checked' : ''} onchange="updateNetDiscountParam('discount_type', 'TL')">
+                                <span class="font-medium text-xs">X TRY İndirim</span>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <label class="form-control">
+                                <span class="label-text text-[11px] font-semibold text-base-content/80">${isPct ? 'İndirim Yüzdesi (%)' : 'İndirim Tutarı (₺)'}</span>
+                                <div class="join w-full">
+                                    <input type="number" min="0" ${isPct ? 'max="100"' : ''} step="0.01" value="${item.discount_amount}" placeholder="${isPct ? '%' : '₺'}" class="input input-bordered input-xs focus:input-secondary join-item w-full rounded-l-lg" onchange="updateNetDiscountParam('discount_amount', this.value)">
+                                    <span class="btn btn-xs join-item no-animation pointer-events-none text-[10px] px-2 font-bold">${isPct ? '%' : 'TL'}</span>
+                                </div>
+                            </label>
+                            <label class="form-control">
+                                <span class="label-text text-[11px] font-semibold text-base-content/80">Minimum Sepet Tutarı (₺)</span>
+                                <input type="number" min="0" step="0.01" value="${item.min_basket_price || 0}" class="input input-bordered input-xs focus:input-secondary rounded-lg" onchange="updateNetDiscountParam('min_basket_price', this.value)">
+                                <span class="text-[9px] text-base-content/50 mt-0.5">Net indirim türünde min. sepet tutarı 0 ₺'dir.</span>
+                            </label>
+                            <label class="form-control">
+                                <span class="label-text text-[11px] font-semibold text-base-content/80">Sipariş Adedi Limiti</span>
+                                <input type="number" min="0" step="1" value="${item.order_limit || ''}" placeholder="Limit (Opsiyonel)" class="input input-bordered input-xs focus:input-secondary rounded-lg" onchange="updateNetDiscountParam('order_limit', this.value)">
+                            </label>
+                            <label class="form-control">
+                                <span class="label-text text-[11px] font-semibold text-base-content/80">Bitiş Tarihi & Saati</span>
+                                <input type="datetime-local" value="${item.expiry_date || ''}" class="input input-bordered input-xs focus:input-secondary text-[11px] rounded-lg" onchange="updateNetDiscountParam('expiry_date', this.value)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.append(cardHtml);
+        }
+
 
         function updateBulkCampaignOptions() {
             const select = $('#bulkCampaignSelect');
@@ -2176,6 +2419,10 @@
                 couponFilesState.forEach((item, idx) => {
                     dynamicCampaigns.add(dynamicCampaignLabel('coupon', item, idx));
                 });
+            }
+
+            if (netDiscountConfigState && netDiscountConfigState.discount_amount > 0 && netDiscountConfigState.enabled !== false) {
+                dynamicCampaigns.add(dynamicCampaignLabel('net_discount', netDiscountConfigState));
             }
 
             const existingValues = new Set();
@@ -2228,6 +2475,9 @@
                         });
                     }
                 });
+            }
+            if (netDiscountConfigState && netDiscountConfigState.discount_amount > 0 && netDiscountConfigState.enabled !== false) {
+                filterValues.add(dynamicCampaignLabel('net_discount', netDiscountConfigState));
             }
             return Array.from(filterValues).sort();
         }
@@ -2295,6 +2545,7 @@
             const targetMain = $('#bulkCampaignSelect').val();
             const targetExtra = $('#bulkExtraCampaignSelect').val();
             let appliedCount = 0;
+            let blockedCount = 0;
 
             tableData.forEach((row) => {
                 if (row.checked) {
@@ -2304,6 +2555,9 @@
                         row.userExtraSelection = 'Hiçbiri';
                         return;
                     }
+                    const prevMain = row.userSelection;
+                    const prevExtra = row.userExtraSelection;
+
                     if (targetMain !== 'NO_CHANGE') {
                         row.userSelection = targetMain;
                     }
@@ -2311,7 +2565,17 @@
                         row.userExtraSelection = targetExtra;
                     }
                     normalizeRowSelectionsInPlace(row);
-                    appliedCount++;
+
+                    const changed = (row.userSelection !== prevMain || row.userExtraSelection !== prevExtra);
+                    const requestedChanged = (targetMain !== 'NO_CHANGE' && targetMain !== prevMain) || (targetExtra !== 'NO_CHANGE' && targetExtra !== prevExtra);
+
+                    if (changed) {
+                        appliedCount++;
+                    } else if (requestedChanged) {
+                        blockedCount++;
+                    } else if (row.userSelection !== 'Hiçbiri' || row.userExtraSelection !== 'Hiçbiri') {
+                        appliedCount++;
+                    }
                 }
             });
 
@@ -2319,7 +2583,10 @@
             saveUserSelections();
 
             if (appliedCount > 0) {
-                showToast(`${appliedCount} seçili ürüne kampanya seçimleri uygulandı.`, 'success');
+                const blockedMsg = blockedCount > 0 ? ` (${blockedCount} ürün dip fiyat sınırından dolayı korundu)` : '';
+                showToast(`${appliedCount} seçili ürüne kampanya seçimleri uygulandı.${blockedMsg}`, 'success');
+            } else if (blockedCount > 0) {
+                showToast(`Seçilen ürünlerin tamamı dip fiyat sınırının altında kaldığı için uygulanamadı.`, 'warning');
             } else {
                 showToast('Lütfen önce işlem yapılacak ürünleri seçin.', 'warning');
             }
@@ -2375,45 +2642,41 @@
             const badgeColorMap = {
                 'İndirim Listesi': 'badge-outline border-base-300 text-base-content/80',
                 'Plus Muhasebe': 'badge-primary badge-outline font-semibold',
-                'Plus Kampanyası': 'badge-primary badge-ghost font-semibold',
-                'Flaş Muhasebe': 'badge-warning badge-outline font-semibold',
-                'Flaş Kampanyası': 'badge-warning badge-ghost font-semibold',
-                'Avantajlı Muhasebe': 'badge-info badge-outline font-semibold',
-                'Avantajlı Kampanyası': 'badge-info badge-ghost font-semibold'
+                'Avantajlı Muhasebe': 'badge-secondary badge-outline font-semibold',
+                'Flaş Muhasebe': 'badge-accent badge-outline font-semibold'
             };
 
             const badges = dipDetails.map(item => {
-                const typeLabel = escapeHtml(item.type || 'Dip');
-                const priceVal = typeof item.price === 'number' ? item.price.toFixed(2) : escapeHtml(item.price);
-                const colorClass = badgeColorMap[item.type] || 'badge-ghost';
-                return `<span class="badge ${colorClass} badge-xs text-[10px] py-1.5 px-2 rounded-md whitespace-nowrap">${typeLabel}: ${priceVal} TL</span>`;
-            }).join(' ');
+                const price = asNumber(item.price);
+                if (price === null) return '';
+                const source = escapeHtml(item.source || 'Dip');
+                const badgeStyle = badgeColorMap[item.source] || 'badge-outline border-base-300';
+                return `<span class="badge ${badgeStyle} badge-xs text-[10px] py-1 px-1.5 rounded-md whitespace-nowrap">${source}: ${price.toFixed(2)} TL</span>`;
+            }).filter(Boolean).join(' ');
 
-            return `<div class="flex flex-wrap gap-1 max-w-[210px]">${activeFloorBadge}${badges}</div>`;
+            return `<div class="flex flex-col gap-1 items-start">${activeFloorBadge}${badges ? `<div class="flex flex-wrap gap-1">${badges}</div>` : ''}</div>`;
         }
 
         function campaignSelectionHtml(row) {
             const rowIndex = row._index;
             const [selectedMain] = normalizedSelections(row);
-            const matching = (Array.isArray(row.all_matching_main_campaigns) && row.all_matching_main_campaigns.length)
-                ? row.all_matching_main_campaigns
-                : ['Hiçbiri', 'Avantajlı', 'Flaş', 'Plus'];
 
+            const options = ['Hiçbiri', 'Avantajlı', 'Flaş', 'Plus'];
             let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
 
-            matching.forEach(cName => {
+            options.forEach(cName => {
                 const isSelected = selectedMain === cName;
-                const displayLabel = CAMPAIGN_LABELS[cName] || cName;
                 const isSafe = selectionPairIsSafe(row, cName, 'Hiçbiri');
                 const isBelowDip = cName !== 'Hiçbiri' && !isSafe;
-                const tag = isBelowDip ? ' (Dip Altı)' : '';
+
+                let extraTag = isBelowDip ? ' (Dip Altı)' : '';
                 const disabledAttr = isSafe ? '' : ' disabled';
-                selectHtml += `<option value="${escapeHtml(cName)}" ${isSelected ? 'selected' : ''}${disabledAttr}>${escapeHtml(displayLabel + tag)}</option>`;
+                selectHtml += `<option value="${cName}" ${isSelected ? 'selected' : ''}${disabledAttr}>${escapeHtml(cName + extraTag)}</option>`;
             });
 
             selectHtml += '</select>';
 
-            const badges = matching
+            const badges = (Array.isArray(row.all_matching_main_campaigns) ? row.all_matching_main_campaigns : [])
                 .filter(c => c !== 'Hiçbiri')
                 .map(cName => {
                     const label = CAMPAIGN_LABELS[cName] || cName;
@@ -2449,6 +2712,9 @@
                 couponFilesState.forEach((item, idx) => {
                     extraSet.add(dynamicCampaignLabel('coupon', item, idx));
                 });
+            }
+            if (netDiscountConfigState && netDiscountConfigState.discount_amount > 0 && netDiscountConfigState.enabled !== false) {
+                extraSet.add(dynamicCampaignLabel('net_discount', netDiscountConfigState));
             }
             if (row.userExtraSelection) {
                 extraSet.add(row.userExtraSelection);
@@ -2892,7 +3158,7 @@
             return best?.campaign || 'Hiçbiri';
         }
 
-        function autoSelect() {
+                function autoSelect() {
             let selectedCount = 0;
             tableData.forEach(row => {
                 const stok = asNumber(row['Stok Adedi']);
@@ -2905,7 +3171,7 @@
                     const rec = recommendationRule.enabled
                         ? (priorityRecommendation || 'Hiçbiri')
                         : bestEligibleMainCampaign(row);
-                    const recExtra = bestEligibleExtraCampaign(row, rec);
+                    const recExtra = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';
                     row.userSelection = rec;
                     row.userExtraSelection = recExtra;
                     normalizeRowSelectionsInPlace(row);

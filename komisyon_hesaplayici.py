@@ -323,7 +323,7 @@ def merge_flash_intervals(campaign_intervals, accounting_intervals):
     return merged
 
 
-def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, karsilamali_config=None, output_dir=None, user_selections=None, recommendation_rule=None):
+def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon_files=None, net_discount_config=None, karsilamali_config=None, output_dir=None, user_selections=None, recommendation_rule=None):
     recommendation_rule = normalize_recommendation_rule(recommendation_rule)
     required = ('discount', 'commission', 'current')
     missing = [key for key in required if not input_files.get(key)]
@@ -333,6 +333,61 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     output_dir = output_dir or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Çıktılar')
     os.makedirs(output_dir, exist_ok=True)
     out_file = os.path.join(output_dir, 'Kampanya_Hesaplama_Sonuclari.xlsx')
+
+    # Parse net_discount configuration if provided
+    net_discount_item = None
+    if net_discount_config and isinstance(net_discount_config, dict):
+        nd_cfg = normalize_campaign_config(net_discount_config, "net_discount")
+        if nd_cfg.get('enabled', True) is not False and nd_cfg.get('discount_amount', 0) > 0:
+            nd_path = nd_cfg.get('path') or nd_cfg.get('stored_path') or input_files.get('net_discount')
+            if nd_path and os.path.exists(nd_path):
+                try:
+                    nd_df = pd.read_excel(nd_path)
+                    if not nd_df.empty and 'Barkod' in nd_df.columns:
+                        nd_df = nd_df.assign(BARKOD_CLN=nd_df['Barkod'].astype(str).str.strip())
+                        item_dict = nd_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
+                        net_discount_item = {
+                            'id': nd_cfg.get('id') or 'net_discount_1',
+                            'label': build_campaign_label(nd_cfg, "net_discount"),
+                            'min_price': nd_cfg.get('min_price', 0.0),
+                            'discount_amount': nd_cfg.get('discount_amount', 0.0),
+                            'discount_type': nd_cfg.get('discount_type', '%'),
+                            'min_basket_price': nd_cfg.get('min_basket_price', 0.0),
+                            'order_limit': nd_cfg.get('order_limit', 0),
+                            'trendyol_percent': 0.0,
+                            'dict': item_dict
+                        }
+                except Exception: pass
+            if net_discount_item is None:
+                net_discount_item = {
+                    'id': nd_cfg.get('id') or 'net_discount_1',
+                    'label': build_campaign_label(nd_cfg, "net_discount"),
+                    'min_price': nd_cfg.get('min_price', 0.0),
+                    'discount_amount': nd_cfg.get('discount_amount', 0.0),
+                    'discount_type': nd_cfg.get('discount_type', '%'),
+                    'min_basket_price': nd_cfg.get('min_basket_price', 0.0),
+                    'order_limit': nd_cfg.get('order_limit', 0),
+                    'trendyol_percent': 0.0,
+                    'dict': None
+                }
+    elif input_files.get('net_discount') and os.path.exists(input_files['net_discount']):
+        try:
+            nd_df = pd.read_excel(input_files['net_discount'])
+            if not nd_df.empty and 'Barkod' in nd_df.columns:
+                nd_df = nd_df.assign(BARKOD_CLN=nd_df['Barkod'].astype(str).str.strip())
+                item_dict = nd_df.drop_duplicates(subset=['BARKOD_CLN']).set_index('BARKOD_CLN').to_dict('index')
+                net_discount_item = {
+                    'id': 'net_discount_1',
+                    'label': 'Net İndirim',
+                    'min_price': 0.0,
+                    'discount_amount': 0.0,
+                    'discount_type': '%',
+                    'min_basket_price': 0.0,
+                    'order_limit': 0,
+                    'trendyol_percent': 0.0,
+                    'dict': item_dict
+                }
+        except Exception: pass
 
     # Parse multi-counter files configuration if provided
     counter_items = []
@@ -973,6 +1028,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                             c_price_is_fallback,
                         ))
 
+        # 6. Kupon Kampanyaları (Çoklu)
         if coupon_items:
             for cp_item in coupon_items:
                 cp_dict = cp_item['dict']
@@ -1013,6 +1069,47 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                                 evaluation['rate'],
                                 cp_price_is_fallback,
                             ))
+
+        # 7. Net İndirim Kampanyası
+        if net_discount_item:
+            nd_dict = net_discount_item['dict']
+            nd_row = nd_dict.get(b) if nd_dict is not None else {}
+            if nd_row is not None:
+                nd_price = None
+                nd_price_is_fallback = False
+                for nd_col in ['Güncel Satış Fiyatı', 'Mevcut Satış Fiyatı', 'Maksimum Girebileceğin Fiyat', 'Kampanyalı Satış Fiyatı']:
+                    if nd_col in nd_row:
+                        val = to_float(nd_row[nd_col])
+                        if val and val > 0: nd_price = val; break
+                if nd_price is None and guncel_fiyat_calc and guncel_fiyat_calc > 0:
+                    nd_price = guncel_fiyat_calc
+                    nd_price_is_fallback = False
+
+                if nd_price and nd_price >= net_discount_item['min_price'] - 0.01:
+                    nd_rate = get_commission_rate(nd_price, kom_row) if kom_row else None
+                    if nd_rate is None and gun_row:
+                        try: nd_rate = to_float(gun_row['Komisyon Oranı'])
+                        except: pass
+                    evaluation = build_extra_evaluation(nd_price, nd_rate, net_discount_item)
+                    if (
+                        evaluation
+                        and evaluation['customer_price'] >= 0
+                        and (
+                            common_threshold is None
+                            or evaluation['customer_price'] >= common_threshold - 0.01
+                        )
+                    ):
+                        label = net_discount_item['label']
+                        qualified_extra_labels.add(label)
+                        counter_evaluations[label] = evaluation
+                        eligible_campaigns.append(label)
+                        smart_candidates.append((
+                            label,
+                            evaluation['net'],
+                            evaluation['customer_price'],
+                            evaluation['rate'],
+                            nd_price_is_fallback,
+                        ))
 
         selectable = selectable_campaigns(net_1, smart_candidates)
 
@@ -1055,6 +1152,9 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if cp_item['label'] in qualified_extra_labels:
                     if cp_item['label'] not in all_matching_extra_campaigns:
                         all_matching_extra_campaigns.append(cp_item['label'])
+        if net_discount_item and net_discount_item['label'] in qualified_extra_labels:
+            if net_discount_item['label'] not in all_matching_extra_campaigns:
+                all_matching_extra_campaigns.append(net_discount_item['label'])
         for c_item in counter_items:
             if c_item['label'] in qualified_extra_labels:
                 if c_item['label'] not in all_matching_extra_campaigns:
@@ -1160,6 +1260,11 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             'Mevcut İndirim (TL)': discount_fields['Mevcut İndirim (TL)'],
             'Mevcut İndirim (%)': discount_fields['Mevcut İndirim (%)'],
             'Düşülebilecek Dip Fiyat (TL)': min_dip_val,
+            'campaign_floor_prices': {
+                'Avantajlı': av_threshold if av_threshold is not None else min_dip_val,
+                'Flaş': flas_threshold if flas_threshold is not None else min_dip_val,
+                'Plus': plus_threshold if plus_threshold is not None else min_dip_val,
+            },
             'eligible_main_campaigns': eligible_main_campaigns,
             'all_matching_main_campaigns': all_matching_main_campaigns,
             'eligible_extra_campaigns': eligible_extra_campaigns,
@@ -1173,8 +1278,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
     out_file = os.path.join(output_dir, 'Kampanya_Hesaplama_Sonuclari.xlsx') if output_dir else 'Kampanya_Hesaplama_Sonuclari.xlsx'
     try:
         out_df = pd.DataFrame(results)
-        excel_cols = [c for c in out_df.columns if c not in ('eligible_campaigns', 'counter_evaluations', 'eligible_main_campaigns', 'all_matching_main_campaigns', 'eligible_extra_campaigns', 'all_matching_extra_campaigns')]
-        out_df[excel_cols].to_excel(out_file, index=False)
+        out_df.to_excel(out_file, index=False)
     except Exception as e:
         print("Excel kaydetme uyarısı:", e)
 
