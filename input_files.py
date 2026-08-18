@@ -511,9 +511,11 @@ def save_upload_set(files, upload_dir, manifest_path):
                 "original_name": item.get("original_name") or path.name,
                 "uploaded_at": uploaded_at,
             }
-            # Varsa expiry_date de koru - hesapla yapilinca kaybolmasin
+            # Varsa expiry_date ve enabled de koru - hesapla yapilinca kaybolmasin
             if item.get("expiry_date"):
                 entry["expiry_date"] = item["expiry_date"]
+            if "enabled" in item:
+                entry["enabled"] = item["enabled"]
             manifest_files[key] = entry
 
         uploaded_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -526,6 +528,7 @@ def save_upload_set(files, upload_dir, manifest_path):
                 "stored_name": target.name,
                 "original_name": original_name,
                 "uploaded_at": uploaded_at,
+                "enabled": True,
             }
 
         # Mevcut manifest'teki diğer anahtarları (counter_configs, plus_extra_configs vb.) koru
@@ -700,6 +703,7 @@ def load_upload_status(upload_dir, manifest_path):
             "uploaded_at": uploaded_at,
             "uploaded_at_display": uploaded_datetime.astimezone().strftime("%d.%m.%Y %H:%M"),
             "expiry_date": item.get("expiry_date", ""),
+            "enabled": item.get("enabled", True) is not False,
         }
     return status
 
@@ -721,6 +725,18 @@ def save_single_file_expiries(manifest_path, expiries_dict):
         return {**manifest, "files": updated_files}
 
     _mutate_manifest_atomic(manifest_path, update_expiries)
+
+
+def save_single_file_enabled(manifest_path, key, enabled):
+    manifest_path = Path(manifest_path)
+
+    def update_enabled(manifest):
+        files = dict(manifest.get("files", {}))
+        if key in files:
+            files[key] = {**files[key], "enabled": bool(enabled)}
+        return {**manifest, "files": files}
+
+    _mutate_manifest_atomic(manifest_path, update_enabled)
 
 
 def load_user_selections(manifest_path):

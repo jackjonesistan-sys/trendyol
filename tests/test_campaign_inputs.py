@@ -316,7 +316,7 @@ class CalculatorInputTests(unittest.TestCase):
             self.assertTrue(result["success"], result)
             report = pd.read_excel(output / "Kampanya_Hesaplama_Sonuclari.xlsx")
             self.assertEqual(report.loc[0, "İlk Kampanya Seçimi"], "Hiçbiri")
-            self.assertTrue(pd.isna(report.loc[0, "Uygulanabilir Kampanyalar"]))
+            self.assertEqual(report.loc[0, "Uygulanabilir Kampanyalar"], "Komisyon Tarifesi")
 
             plus_extra = root / "plus-extra.xlsx"
             pd.DataFrame(

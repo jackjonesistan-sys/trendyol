@@ -92,68 +92,59 @@ REPORT_COLUMNS = [
     "Ekstra Uygulanabilir İndirim (%)",
 ]
 ROUNDING_EPSILON = 1e-9
-from xlsx_postprocess import fix_xlsx_for_trendyol
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 240 * 1024 * 1024
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(BASE_DIR, "Girdiler")
-OUTPUT_DIR = os.path.join(BASE_DIR, "Çıktılar")
-UPLOAD_DIR = os.path.join(INPUT_DIR, "Yuklenen")
-INPUT_MANIFEST = os.path.join(INPUT_DIR, "yuklenen_girdiler.json")
-
-os.makedirs(INPUT_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-F_HESAP = os.path.join(OUTPUT_DIR, "Kampanya_Hesaplama_Sonuclari.xlsx")
-
-REPORT_COLUMNS = [
+REQUIRED_RESULT_COLUMNS = {
     "Barkod",
-    "Güncel Fiyat (TL)",
-    "Güncel Net",
-    "Güncel Komisyon",
-    "Avantajlı Fiyat (TL)",
-    "Avantajlı Net",
-    "Flaş Fiyat (TL)",
-    "Flaş Net",
-    "Plus Fiyat (TL)",
-    "Plus Net",
-    "Plus Ek İndirim Fiyat (TL)",
-    "Plus Ek İndirim Net",
-    "Karşılamalı Kampanya Fiyat (TL)",
-    "Karşılamalı Kampanya Net",
-    "Uygulanan Kampanya",
-    "Ekstra Kampanya",
-    "Hangisi Karlı?",
+    "Güncel Ürün Fiyatı (TL)",
+    "Güncel Ürün Komisyon (%)",
+    "Güncel Ürün Kalan Net (TL)",
+    "Avantajlı Ürün Fiyatı (YENİ TSF) (TL)",
+    "Avantajlı Ürün Komisyon (%)",
+    "Avantajlı Ürün Kalan Net (TL)",
+    "Flaş Ürün 24 Saat Fiyatı (TL)",
+    "Flaş Ürün Komisyon (%)",
+    "Flaş Ürün Kalan Net (TL)",
+    "Plus Fiyatı (TL)",
+    "Plus Komisyon (%)",
+    "Plus Net (TL)",
+    "Komisyon Tarifesi Fiyatı (TL)",
+    "Komisyon Tarifesi Komisyon (%)",
+    "Komisyon Tarifesi Net (TL)",
+    "Uygulanabilir Kampanyalar",
+    "Önerilen Kampanya",
+    "Önerilen Ekstra Kampanya",
+    "İlk Kampanya Seçimi",
+    "İlk Ekstra Kampanya Seçimi",
     "Düşülebilecek Dip Fiyat (TL)",
-    "Uygulanan Kampanya Fiyat",
-    "Uygulanan Kampanya Net",
-    "Uygulanan Kampanya Komisyon",
-    "Uygulanabilecek İndirim (TL)",
-    "Uygulanabilecek İndirim (%)",
-    "Uygulanan İndirim (TL)",
-    "Uygulanan İndirim (%)",
-    "Ekstra Uygulanabilir İndirim (TL)",
-    "Ekstra Uygulanabilir İndirim (%)",
-]
-ROUNDING_EPSILON = 1e-9
+    "eligible_main_campaigns",
+    "all_matching_main_campaigns",
+    "eligible_extra_campaigns",
+    "all_matching_extra_campaigns",
+    "eligible_campaigns",
+    "all_matching_campaigns",
+    "counter_evaluations",
+    "flash_evaluations",
+    "dip_details",
+    "campaign_floor_prices",
+}
 
 CAMPAIGN_LABELS = {
     "Avantajlı": "Avantajlı Ürün",
     "Flaş": "Flaş Ürün",
     "Plus": "Plus Ürün",
+    "Komisyon Tarifesi": "Komisyon Tarifesi",
 }
 VALID_TARGET_TYPES = {
     "Hepsi",
     "Avantajlı",
     "Flaş",
     "Plus",
+    "Komisyon Tarifesi",
     "Plus Ek İndirim",
     "Karşılamalı Kampanya",
     "Net İndirim",
 }
-MAIN_SELECTIONS = {"Hiçbiri", "Avantajlı", "Flaş", "Plus"}
+MAIN_SELECTIONS = {"Hiçbiri", "Avantajlı", "Flaş", "Plus", "Komisyon Tarifesi"}
 
 
 def as_number(value):
@@ -349,6 +340,10 @@ def selected_campaign_values(row):
         base_price = as_number(row.get("Plus Fiyatı (TL)"))
         base_net = as_number(row.get("Plus Net (TL)"))
         base_comm = as_number(row.get("Plus Komisyon (%)"))
+    elif main_sel == "Komisyon Tarifesi":
+        base_price = as_number(row.get("Komisyon Tarifesi Fiyatı (TL)"))
+        base_net = as_number(row.get("Komisyon Tarifesi Net (TL)"))
+        base_comm = as_number(row.get("Komisyon Tarifesi Komisyon (%)"))
     else:
         base_price = as_number(row.get("Güncel Ürün Fiyatı (TL)"))
         base_net = as_number(row.get("Güncel Ürün Kalan Net (TL)"))
@@ -503,6 +498,8 @@ def build_report_row(row):
         "Flaş Net": as_number(row.get("Flaş Ürün Kalan Net (TL)")),
         "Plus Fiyat (TL)": as_number(row.get("Plus Fiyatı (TL)")),
         "Plus Net": as_number(row.get("Plus Net (TL)")),
+        "Komisyon Tarifesi Fiyat (TL)": as_number(row.get("Komisyon Tarifesi Fiyatı (TL)")),
+        "Komisyon Tarifesi Net": as_number(row.get("Komisyon Tarifesi Net (TL)")),
         "Plus Ek İndirim Fiyat (TL)": plus_extra_price,
         "Plus Ek İndirim Net": plus_extra_net,
         "Karşılamalı Kampanya Fiyat (TL)": counter_price,
@@ -606,6 +603,7 @@ def selection_pair_is_safe(row, main_selection, extra_selection):
                 "Avantajlı": "Avantajlı Ürün Fiyatı (YENİ TSF) (TL)",
                 "Flaş": "Flaş Ürün 24 Saat Fiyatı (TL)",
                 "Plus": "Plus Fiyatı (TL)",
+                "Komisyon Tarifesi": "Komisyon Tarifesi Fiyatı (TL)",
             }
             base_price = (
                 as_number(row.get(main_price_fields.get(main_sel)))
@@ -921,6 +919,9 @@ def toggle_campaign_enabled():
             if nd_cfg:
                 nd_cfg["enabled"] = enabled
                 save_net_discount_config(INPUT_MANIFEST, nd_cfg)
+        elif camp_type == "single_file" or item_id in INPUT_SPECS:
+            from input_files import save_single_file_enabled
+            save_single_file_enabled(INPUT_MANIFEST, item_id, enabled)
 
         return jsonify({"success": True})
     except Exception as e:
@@ -1119,6 +1120,18 @@ def calculate():
             except Exception as exp_err:
                 print("Single expiries parse error:", exp_err)
 
+        single_enabled_raw = request.form.get("single_enabled_json")
+        if single_enabled_raw:
+            try:
+                single_enabled = json.loads(single_enabled_raw)
+                if isinstance(single_enabled, dict):
+                    from input_files import save_single_file_enabled
+                    for k, v in single_enabled.items():
+                        if k in INPUT_SPECS:
+                            save_single_file_enabled(INPUT_MANIFEST, k, bool(v))
+            except Exception as en_err:
+                print("Single enabled parse error:", en_err)
+
         counter_files = []
         counter_dir = os.path.join(UPLOAD_DIR, "counter_files")
         os.makedirs(counter_dir, exist_ok=True)
@@ -1265,7 +1278,18 @@ def calculate():
         # Reset saved user selections on new calculation so all products start fresh as 'Hiçbiri'
         save_user_selections(INPUT_MANIFEST, {})
         user_selections = {}
-        result = calculate_all(input_files, counter_files=counter_files, plus_extra_files=plus_extra_files, coupon_files=coupon_files, net_discount_config=net_discount_config, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR, user_selections=user_selections, recommendation_rule=recommendation_rule)
+
+        # Sadece Aktif olan tekil dosyaları hesaplamaya dahil et (Pasif olanları muaf tut)
+        upload_status = load_upload_status(UPLOAD_DIR, INPUT_MANIFEST)
+        active_input_files = {}
+        for k, p in input_files.items():
+            st = upload_status.get(k, {})
+            if st.get("enabled", True) is not False:
+                active_input_files[k] = p
+            else:
+                active_input_files[k] = None
+
+        result = calculate_all(active_input_files, counter_files=counter_files, plus_extra_files=plus_extra_files, coupon_files=coupon_files, net_discount_config=net_discount_config, karsilamali_config=karsilamali_config, output_dir=OUTPUT_DIR, user_selections=user_selections, recommendation_rule=recommendation_rule)
         if result.get("success"):
             result["uploads"] = load_upload_status(UPLOAD_DIR, INPUT_MANIFEST)
             result["counter_configs"] = load_counter_configs(INPUT_MANIFEST)
@@ -1760,6 +1784,48 @@ def apply_campaign():
                             generated_files.append(os.path.join(timestamp_folder, file_name))
             except Exception:
                 return processing_error("Plus dosya")
+
+    # 3.5 Process Ürün Komisyon Tarifeleri
+    if target_type in ['Hepsi', 'Komisyon Tarifesi']:
+        kom_path = input_files.get('commission')
+        if kom_path and os.path.exists(kom_path):
+            try:
+                wb_kom = openpyxl.load_workbook(kom_path)
+                ws_kom = wb_kom.active
+                b_idx_kom = header_index(ws_kom, 'Barkod') or header_index(ws_kom, 'BARKOD')
+                fiyat_idx_kom = ensure_header(ws_kom, 'YENİ TSF (FİYAT GÜNCELLE)')
+                secim_idx_kom = ensure_header(ws_kom, 'Tarife Seçimi')
+
+                if b_idx_kom:
+                    keep_rows = []
+                    for r in range(2, ws_kom.max_row + 1):
+                        b_val = ws_kom.cell(r, b_idx_kom).value
+                        if not b_val:
+                            continue
+                        b_val_str = str(b_val).strip()
+                        main_sel, extra_sel = get_selection(b_val_str)
+                        if main_sel == "Komisyon Tarifesi":
+                            row_info = row_by_barcode.get(b_val_str, {})
+                            if fiyat_idx_kom:
+                                sel_price = row_info.get('Komisyon Tarifesi Fiyatı (TL)')
+                                if sel_price is not None and not pd.isna(sel_price):
+                                    ws_kom.cell(r, fiyat_idx_kom).value = float(sel_price)
+                            if secim_idx_kom:
+                                sel_tarife = row_info.get('Komisyon Tarifesi Seçimi') or '7 Günlük Fiyat'
+                                ws_kom.cell(r, secim_idx_kom).value = str(sel_tarife)
+                            keep_rows.append(r)
+
+                    if keep_rows:
+                        safe_keep_rows(ws_kom, keep_rows)
+                        file_name = "Urun_Komisyon_Tarifeleri_Urunler.xlsx"
+                        out_name = os.path.join(run_output_dir, file_name)
+                        shrink_data_validations(ws_kom)
+                        wb_kom.save(out_name)
+                        fix_xlsx_for_trendyol(out_name)
+                        generated_files.append(os.path.join(timestamp_folder, file_name))
+            except Exception as e:
+                print("Komisyon Tarifesi export error:", e)
+                return processing_error("Ürün Komisyon Tarifeleri dosya")
 
     # 4. Process Plus Ek İndirim (Çoklu Dosya Desteği)
     if target_type in ['Hepsi', 'Plus Ek İndirim']:

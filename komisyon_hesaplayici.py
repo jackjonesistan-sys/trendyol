@@ -1,4 +1,5 @@
 import os
+import re
 import math
 from datetime import date, datetime
 import pandas as pd
@@ -18,6 +19,7 @@ CAMPAIGN_LABELS = {
     "Avantajlı": "Avantajlı Ürün",
     "Flaş": "Flaş Ürün",
     "Plus": "Plus Ürün",
+    "Komisyon Tarifesi": "Komisyon Tarifesi",
 }
 
 
@@ -68,6 +70,91 @@ def get_commission_rate(price, row):
         return None
 
 
+def find_commission_tariff_period_label(kom_row):
+    if not kom_row or not isinstance(kom_row, dict):
+        return "7 Günlük Fiyat"
+    for col in kom_row.keys():
+        m = re.search(r"Tarih\s*aral[ıi][ğg][ıi]\s*\((\d+)\s*G[üu]n\)", str(col), re.IGNORECASE)
+        if m:
+            days = m.group(1)
+            return f"{days} Günlük Fiyat"
+    tarife_val = kom_row.get("Tarife Seçimi")
+    if tarife_val and not pd.isna(tarife_val) and str(tarife_val).strip() != "":
+        return str(tarife_val).strip()
+    return "7 Günlük Fiyat"
+
+
+def evaluate_commission_tariff_bracket(kom_row, dip_price=None, dip_net=None, guncel_fiyat=None):
+    if not kom_row or not isinstance(kom_row, dict):
+        return None
+
+    has_tier = any(
+        to_float(kom_row.get(col)) is not None and to_float(kom_row.get(col)) > 0
+        for col in ("2.Fiyat Üst Limiti", "3.Fiyat Üst Limiti", "4.Fiyat Üst Limiti")
+    )
+    if not has_tier:
+        return None
+
+    brackets = [
+        {
+            "kademe_no": 4,
+            "kademe_adi": "4. Kademe",
+            "price": to_float(kom_row.get("4.Fiyat Üst Limiti")),
+            "rate": to_float(kom_row.get("4.KOMİSYON")),
+        },
+        {
+            "kademe_no": 3,
+            "kademe_adi": "3. Kademe",
+            "price": to_float(kom_row.get("3.Fiyat Üst Limiti")),
+            "rate": to_float(kom_row.get("3.KOMİSYON")),
+        },
+        {
+            "kademe_no": 2,
+            "kademe_adi": "2. Kademe",
+            "price": to_float(kom_row.get("2.Fiyat Üst Limiti")),
+            "rate": to_float(kom_row.get("2.KOMİSYON")),
+        },
+        {
+            "kademe_no": 1,
+            "kademe_adi": "1. Kademe",
+            "price": to_float(kom_row.get("1.Fiyat Alt Limit")),
+            "rate": to_float(kom_row.get("1.KOMİSYON")),
+        },
+    ]
+
+    valid_candidates = []
+    for b in brackets:
+        p = b["price"]
+        r = b["rate"]
+        if p is not None and p > 0 and r is not None:
+            net = round(p - (p * (r / 100.0)), 2)
+            b["net"] = net
+            passes_dip_net = (dip_net is None or net >= dip_net - 0.01)
+            b["eligible"] = bool(passes_dip_net and net > 0)
+            valid_candidates.append(b)
+
+    if not valid_candidates:
+        return None
+
+    eligible_candidates = [b for b in valid_candidates if b["eligible"]]
+    tariff_selection = find_commission_tariff_period_label(kom_row)
+
+    if eligible_candidates:
+        best = min(eligible_candidates, key=lambda x: (x["price"], -x["net"]))
+        return {
+            **best,
+            "tariff_selection": tariff_selection,
+            "has_eligible": True,
+        }
+    else:
+        best = min(valid_candidates, key=lambda x: (x["price"], -x["net"]))
+        return {
+            **best,
+            "tariff_selection": tariff_selection,
+            "has_eligible": False,
+        }
+
+
 def fallback_candidate_is_selectable(current_net, candidate_net, used_current_price):
     return not used_current_price or (
         current_net is not None
@@ -88,8 +175,8 @@ def selectable_campaigns(current_net, candidates):
     ]
 
 
-ALLOWED_FOR_RECOMMENDATION = {'Avantajlı', 'Flaş', 'Plus'}
-MAIN_CAMPAIGN_KEYS = {'Avantajlı', 'Flaş', 'Plus'}
+ALLOWED_FOR_RECOMMENDATION = {'Avantajlı', 'Flaş', 'Plus', 'Komisyon Tarifesi'}
+MAIN_CAMPAIGN_KEYS = {'Avantajlı', 'Flaş', 'Plus', 'Komisyon Tarifesi'}
 
 
 def choose_campaigns_smart(current_net, candidates, recommendation_rule=None):
@@ -108,8 +195,13 @@ def choose_campaigns_smart(current_net, candidates, recommendation_rule=None):
     if main_selectable:
         if rule["enabled"]:
             selectable_main_names = {candidate[0] for candidate in main_selectable}
+            priority_order = list(rule["priority"])
+            for name in MAIN_CAMPAIGN_KEYS:
+                if name not in priority_order:
+                    priority_order.append(name)
             best_main = next(
-                name for name in rule["priority"] if name in selectable_main_names
+                (name for name in priority_order if name in selectable_main_names),
+                min(main_selectable, key=lambda x: (-x[1], -x[2], x[0]))[0]
             )
         else:
             best_main = min(
@@ -522,7 +614,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
 
     df_gun['BARKOD_CLN'] = df_gun['Barkod'].astype(str).str.strip()
     gun_barcodes = df_gun['BARKOD_CLN'].unique()
-    df_kom['BARKOD_CLN'] = df_kom['BARKOD'].astype(str).str.strip()
+    kom_b_col = 'BARKOD' if 'BARKOD' in df_kom.columns else ('Barkod' if 'Barkod' in df_kom.columns else df_kom.columns[0])
+    df_kom['BARKOD_CLN'] = df_kom[kom_b_col].astype(str).str.strip()
     barcodes = sorted(set(tr_barcodes).union(set(gun_barcodes)))
 
     for dataframe, barcode_column in (
@@ -681,6 +774,12 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
         all_dips = [d['price'] for d in dip_details]
         min_dip_val = min(all_dips) if all_dips else None
         common_threshold = min_dip_val
+
+        dip_rate = get_commission_rate(min_dip_val, kom_row) if (min_dip_val and kom_row) else None
+        if dip_rate is None and min_dip_val and gun_row:
+            try: dip_rate = to_float(gun_row.get('Komisyon Oranı'))
+            except Exception: pass
+        dip_net = round(min_dip_val - (min_dip_val * (dip_rate / 100.0)), 2) if (min_dip_val and dip_rate is not None) else None
 
         # Ürünün katılabileceği kampanyaların tespiti (eligible_campaigns)
         eligible_campaigns = ['Hiçbiri']
@@ -900,6 +999,26 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                     if net_4 is not None:
                         smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
 
+        # 3.5 Komisyon Tarifesi Kampanyası (4 Kademeli Optimizasyon)
+        kom_tarife_fiyat = None
+        kom_tarife_oran = None
+        kom_tarife_net = None
+        kom_tarife_kademe = None
+        kom_tarife_secimi = None
+        kom_has_eligible = False
+        if kom_row is not None:
+            kom_eval = evaluate_commission_tariff_bracket(kom_row, min_dip_val, dip_net, guncel_fiyat_calc)
+            if kom_eval is not None:
+                kom_tarife_fiyat = kom_eval["price"]
+                kom_tarife_oran = kom_eval["rate"]
+                kom_tarife_net = kom_eval["net"]
+                kom_tarife_kademe = kom_eval["kademe_adi"]
+                kom_tarife_secimi = kom_eval["tariff_selection"]
+                kom_has_eligible = kom_eval["has_eligible"]
+                if kom_has_eligible:
+                    eligible_campaigns.append("Komisyon Tarifesi")
+                    if kom_tarife_net is not None:
+                        smart_candidates.append(("Komisyon Tarifesi", kom_tarife_net, kom_tarife_fiyat, kom_tarife_oran, False, False))
 
         counter_evaluations = {}
         qualified_extra_labels = set()
@@ -1134,6 +1253,8 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             and plus_tariff_label is not None
         ):
             if 'Plus' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Plus')
+        if kom_row is not None and kom_tarife_fiyat and kom_has_eligible:
+            if 'Komisyon Tarifesi' not in all_matching_main_campaigns: all_matching_main_campaigns.append('Komisyon Tarifesi')
 
         eligible_main_campaigns = ['Hiçbiri'] + [c[0] for c in selectable if c[0] in MAIN_CAMPAIGN_KEYS]
 
@@ -1221,6 +1342,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             'Plus Eşleşme Durumu': 'Eşleşti' if match_plus else 'Eşleşme Yok',
             'Avantajlı Ürün Eşleşme Durumu': 'Eşleşti' if match_av else 'Eşleşme Yok',
             'Flaş Ürün Eşleşme Durumu': 'Eşleşti' if match_fl else 'Eşleşme Yok',
+            'Komisyon Tarifesi Eşleşme Durumu': 'Eşleşti' if kom_row is not None else 'Eşleşme Yok',
             'Hem Avantajlı Hem Flaş': 'Evet' if (match_av and match_fl) else 'Hayır',
             'İndirim Uygulanabilir': 'Evet' if (common_dip is not None or len(dip_details) > 0) else 'Hayır',
             'Mevcut İndirim Oranı (%)': mevcut_indirim_orani,
@@ -1246,6 +1368,11 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             'Plus Komisyon (%)': rate_4,
             'Plus Net (TL)': net_4,
             **plus_audit_fields,
+            'Komisyon Tarifesi Fiyatı (TL)': kom_tarife_fiyat,
+            'Komisyon Tarifesi Komisyon (%)': kom_tarife_oran,
+            'Komisyon Tarifesi Net (TL)': kom_tarife_net,
+            'Komisyon Tarifesi Kademe': kom_tarife_kademe,
+            'Komisyon Tarifesi Seçimi': kom_tarife_secimi,
             'Plus Ek Fiyatı (TL)': plus_ek_fiyat,
             'Plus Ek Komisyon (%)': rate_5,
             'Plus Ek Net (TL)': net_5,
@@ -1264,6 +1391,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 'Avantajlı': av_threshold if av_threshold is not None else min_dip_val,
                 'Flaş': flas_threshold if flas_threshold is not None else min_dip_val,
                 'Plus': plus_threshold if plus_threshold is not None else min_dip_val,
+                'Komisyon Tarifesi': kom_tarife_fiyat if (kom_has_eligible and kom_tarife_fiyat is not None) else min_dip_val,
             },
             'eligible_main_campaigns': eligible_main_campaigns,
             'all_matching_main_campaigns': all_matching_main_campaigns,

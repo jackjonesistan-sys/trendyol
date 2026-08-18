@@ -308,15 +308,22 @@
                         {% for key in ['advantage', 'flash', 'plus'] %}
                         {% set spec = input_specs.get(key) %}
                         {% set uploaded = uploaded_inputs.get(key) %}
-                        <div
-                            class="card bg-base-100 border border-base-200/90 shadow-2xs hover:shadow-sm transition-all duration-200 rounded-xl">
+                        {% set is_active = (not uploaded or uploaded.enabled is not false) %}
+                        <div id="card_single_{{ key }}"
+                            class="card bg-base-100 border border-base-200/90 shadow-2xs hover:shadow-sm transition-all duration-200 rounded-xl {{ 'opacity-55 grayscale-[30%] bg-base-200/40' if uploaded and uploaded.enabled is false else '' }}">
                             <div class="card-body p-4 space-y-2">
-                                <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
                                     <span class="text-xs font-bold text-base-content flex items-center gap-1.5">
                                         <span class="w-2 h-2 rounded-full bg-warning"></span>
                                         {{ spec.label }}
                                     </span>
-                                    <div id="badge_single_{{ key }}"></div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="cursor-pointer flex items-center gap-1.5 bg-base-200/80 px-2 py-0.5 rounded-lg border border-base-300 hover:bg-base-200 transition-colors" title="Hesaplamaya dahil et / muaf tut">
+                                            <input type="checkbox" class="checkbox checkbox-xs checkbox-warning" id="toggle_enabled_{{ key }}" {{ 'checked' if is_active else '' }} onchange="toggleSingleFileEnabled('{{ key }}', this.checked)">
+                                            <span id="toggle_label_{{ key }}" class="text-[11px] font-bold {{ 'text-warning' if is_active else 'text-base-content/40' }}">{{ 'Aktif' if is_active else 'Pasif' }}</span>
+                                        </label>
+                                        <div id="badge_single_{{ key }}"></div>
+                                    </div>
                                 </div>
                                 <input id="input_{{ key }}" type="file" accept=".xlsx" data-required="false"
                                     aria-label="{{ spec.label }} Excel dosyası"
@@ -369,15 +376,22 @@
                         {% for key in ['muhasebe_avantaj', 'muhasebe_flas', 'muhasebe_plus'] %}
                         {% set spec = input_specs.get(key) %}
                         {% set uploaded = uploaded_inputs.get(key) %}
-                        <div
-                            class="card bg-base-100 border border-base-200/90 shadow-2xs hover:shadow-sm transition-all duration-200 rounded-xl">
+                        {% set is_active = (not uploaded or uploaded.enabled is not false) %}
+                        <div id="card_single_{{ key }}"
+                            class="card bg-base-100 border border-base-200/90 shadow-2xs hover:shadow-sm transition-all duration-200 rounded-xl {{ 'opacity-55 grayscale-[30%] bg-base-200/40' if uploaded and uploaded.enabled is false else '' }}">
                             <div class="card-body p-4 space-y-2">
-                                <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
                                     <span class="text-xs font-bold text-base-content flex items-center gap-1.5">
                                         <span class="w-2 h-2 rounded-full bg-success"></span>
                                         {{ spec.label }}
                                     </span>
-                                    <div id="badge_single_{{ key }}"></div>
+                                    <div class="flex items-center gap-2">
+                                        <label class="cursor-pointer flex items-center gap-1.5 bg-base-200/80 px-2 py-0.5 rounded-lg border border-base-300 hover:bg-base-200 transition-colors" title="Hesaplamaya dahil et / muaf tut">
+                                            <input type="checkbox" class="checkbox checkbox-xs checkbox-success" id="toggle_enabled_{{ key }}" {{ 'checked' if is_active else '' }} onchange="toggleSingleFileEnabled('{{ key }}', this.checked)">
+                                            <span id="toggle_label_{{ key }}" class="text-[11px] font-bold {{ 'text-success' if is_active else 'text-base-content/40' }}">{{ 'Aktif' if is_active else 'Pasif' }}</span>
+                                        </label>
+                                        <div id="badge_single_{{ key }}"></div>
+                                    </div>
                                 </div>
                                 <input id="input_{{ key }}" type="file" accept=".xlsx" data-required="false"
                                     aria-label="{{ spec.label }} Excel dosyası"
@@ -589,6 +603,7 @@
                                                 <option value="Avantajlı">Avantajlı Yap</option>
                                                 <option value="Flaş">Flaş Yap</option>
                                                 <option value="Plus">Plus Yap</option>
+                                                <option value="Komisyon Tarifesi">Komisyon Tarifesi Yap</option>
                                                 <option value="Hiçbiri">Hiçbiri (Temizle)</option>
                                             </select>
                                         </div>
@@ -689,6 +704,10 @@
                                 <li><button type="button"
                                         onclick="applyCampaigns('Plus'); if(document.activeElement) document.activeElement.blur();"
                                         class="hover:bg-base-200 py-2.5 text-left w-full rounded-lg">Sadece Plus
+                                        Oluştur</button></li>
+                                <li><button type="button"
+                                        onclick="applyCampaigns('Komisyon Tarifesi'); if(document.activeElement) document.activeElement.blur();"
+                                        class="hover:bg-base-200 py-2.5 text-left w-full rounded-lg">Sadece Komisyon Tarifesi
                                         Oluştur</button></li>
                                 <li><button type="button"
                                         onclick="applyCampaigns('Plus Ek İndirim'); if(document.activeElement) document.activeElement.blur();"
@@ -876,6 +895,7 @@
             'Avantajlı': 'Avantajlı Ürün',
             'Flaş': 'Flaş Ürün',
             'Plus': 'Plus Ürün',
+            'Komisyon Tarifesi': 'Komisyon Tarifesi',
             'Plus Ek İndirim %5': 'Plus Ek İndirim %5',
             'Plus Ek İndirim %10': 'Plus Ek İndirim %10',
             'Plus Ek İndirim %20': 'Plus Ek İndirim %20',
@@ -1023,6 +1043,10 @@
                 basePrice = asNumber(row['Plus Fiyatı (TL)']);
                 baseNet = asNumber(row['Plus Net (TL)']);
                 baseComm = asNumber(row['Plus Komisyon (%)']);
+            } else if (mainSel === 'Komisyon Tarifesi') {
+                basePrice = asNumber(row['Komisyon Tarifesi Fiyatı (TL)']);
+                baseNet = asNumber(row['Komisyon Tarifesi Net (TL)']);
+                baseComm = asNumber(row['Komisyon Tarifesi Komisyon (%)']);
             } else {
                 basePrice = asNumber(row['Güncel Ürün Fiyatı (TL)']);
                 baseNet = asNumber(row['Güncel Ürün Kalan Net (TL)']);
@@ -1126,7 +1150,8 @@
             const mainPriceFields = {
                 'Avantajlı': 'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)',
                 'Flaş': 'Flaş Ürün 24 Saat Fiyatı (TL)',
-                'Plus': 'Plus Fiyatı (TL)'
+                'Plus': 'Plus Fiyatı (TL)',
+                'Komisyon Tarifesi': 'Komisyon Tarifesi Fiyatı (TL)'
             };
             if (mainSel !== 'Hiçbiri'
                 && asNumber(row[mainPriceFields[mainSel]]) === null) {
@@ -1217,6 +1242,8 @@
                 'Flaş Net': asNumber(row['Flaş Ürün Kalan Net (TL)']),
                 'Plus Fiyat (TL)': asNumber(row['Plus Fiyatı (TL)']),
                 'Plus Net': asNumber(row['Plus Net (TL)']),
+                'Komisyon Tarifesi Fiyat (TL)': asNumber(row['Komisyon Tarifesi Fiyatı (TL)']),
+                'Komisyon Tarifesi Net': asNumber(row['Komisyon Tarifesi Net (TL)']),
                 'Plus Ek İndirim Fiyat (TL)': plusExtraPrice,
                 'Plus Ek İndirim Net': plusExtraNet,
                 'Karşılamalı Kampanya Fiyat (TL)': counterPrice,
@@ -1394,6 +1421,14 @@
                 if (el && el.value) singleExpiries[k] = el.value;
             });
             formData.append('single_expiries_json', JSON.stringify(singleExpiries));
+
+            const singleEnabled = {};
+            const toggleKeys = ['advantage', 'flash', 'plus', 'muhasebe_avantaj', 'muhasebe_flas', 'muhasebe_plus'];
+            toggleKeys.forEach(k => {
+                const el = document.getElementById('toggle_enabled_' + k);
+                if (el) singleEnabled[k] = el.checked;
+            });
+            formData.append('single_enabled_json', JSON.stringify(singleEnabled));
 
             document.getElementById('loadingOverlay').style.display = 'flex';
 
@@ -1775,6 +1810,39 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ single_expiries: { [key]: val } })
+            }).catch(function () { });
+        };
+
+        window.toggleSingleFileEnabled = function toggleSingleFileEnabled(key, isEnabled) {
+            const card = document.getElementById('card_single_' + key);
+            const label = document.getElementById('toggle_label_' + key);
+            if (card) {
+                if (isEnabled) {
+                    card.classList.remove('opacity-55', 'grayscale-[30%]', 'bg-base-200/40');
+                } else {
+                    card.classList.add('opacity-55', 'grayscale-[30%]', 'bg-base-200/40');
+                }
+            }
+            if (label) {
+                const activeColor = key.startsWith('muhasebe') ? 'text-success' : 'text-warning';
+                if (isEnabled) {
+                    label.textContent = 'Aktif';
+                    label.classList.remove('text-base-content/40');
+                    label.classList.add(activeColor);
+                } else {
+                    label.textContent = 'Pasif';
+                    label.classList.remove('text-success', 'text-warning');
+                    label.classList.add('text-base-content/40');
+                }
+            }
+            fetch('/api/toggle-campaign-enabled', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'single_file', id: key, enabled: isEnabled })
+            }).then(res => res.json()).then(data => {
+                if (data && data.success) {
+                    showToast(`${key} durumu ${isEnabled ? 'Aktif' : 'Pasif'} olarak güncellendi.`, 'info');
+                }
             }).catch(function () { });
         };
 
@@ -2440,7 +2508,7 @@
         }
 
         function getUygulananKampanyaFilterValues() {
-            const filterValues = new Set(['Hiçbiri', 'Avantajlı Ürün', 'Flaş Ürün', 'Plus Ürün']);
+            const filterValues = new Set(['Hiçbiri', 'Avantajlı Ürün', 'Flaş Ürün', 'Plus Ürün', 'Komisyon Tarifesi']);
             if (Array.isArray(tableData)) {
                 tableData.forEach(row => {
                     const selection = row.userSelection || 'Hiçbiri';
@@ -2661,7 +2729,7 @@
             const rowIndex = row._index;
             const [selectedMain] = normalizedSelections(row);
 
-            const options = ['Hiçbiri', 'Avantajlı', 'Flaş', 'Plus'];
+            const options = ['Hiçbiri', 'Avantajlı', 'Flaş', 'Plus', 'Komisyon Tarifesi'];
             let selectHtml = `<select aria-label="${escapeHtml(row.Barkod || 'Ürün')} ana kampanya seçimi" class="select select-bordered select-xs w-full max-w-full font-semibold campaign-select border-primary/40 focus:border-primary rounded-lg" onchange="updateSelection(${rowIndex}, this.value)">`;
 
             options.forEach(cName => {
@@ -3116,10 +3184,12 @@
             const metrics = {
                 'Avantajlı': ['Avantajlı Ürün Kalan Net (TL)', 'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)'],
                 'Flaş': ['Flaş Ürün Kalan Net (TL)', 'Flaş Ürün 24 Saat Fiyatı (TL)'],
-                'Plus': ['Plus Net (TL)', 'Plus Fiyatı (TL)']
+                'Plus': ['Plus Net (TL)', 'Plus Fiyatı (TL)'],
+                'Komisyon Tarifesi': ['Komisyon Tarifesi Net (TL)', 'Komisyon Tarifesi Fiyatı (TL)']
             };
-            const candidates = MAIN_CAMPAIGNS
-                .filter(campaign => eligible.includes(campaign))
+            const allMainKeys = ['Avantajlı', 'Flaş', 'Plus', 'Komisyon Tarifesi'];
+            const candidates = allMainKeys
+                .filter(campaign => eligible.includes(campaign) && selectionPairIsSafe(row, campaign, 'Hiçbiri'))
                 .map(campaign => {
                     const net = asNumber(row[metrics[campaign][0]]);
                     if (net === null) return null;
@@ -3158,7 +3228,7 @@
             return best?.campaign || 'Hiçbiri';
         }
 
-                function autoSelect() {
+        function autoSelect() {
             let selectedCount = 0;
             tableData.forEach(row => {
                 const stok = asNumber(row['Stok Adedi']);
@@ -3167,9 +3237,9 @@
                     row.userExtraSelection = 'Hiçbiri';
                 } else {
                     const eligible = Array.isArray(row.eligible_main_campaigns) ? row.eligible_main_campaigns : [];
-                    const priorityRecommendation = recommendationRule.priority.find(campaign => eligible.includes(campaign));
+                    const priorityRecommendation = recommendationRule.priority.find(campaign => eligible.includes(campaign)) || (eligible.includes('Komisyon Tarifesi') ? 'Komisyon Tarifesi' : null);
                     const rec = recommendationRule.enabled
-                        ? (priorityRecommendation || 'Hiçbiri')
+                        ? (priorityRecommendation || row['Önerilen Kampanya'] || 'Hiçbiri')
                         : bestEligibleMainCampaign(row);
                     const recExtra = row['Önerilen Ekstra Kampanya'] || 'Hiçbiri';
                     row.userSelection = rec;
