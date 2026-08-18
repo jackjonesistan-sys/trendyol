@@ -87,6 +87,8 @@ def find_commission_tariff_period_label(kom_row):
 def evaluate_commission_tariff_bracket(kom_row, dip_price=None, dip_net=None, guncel_fiyat=None):
     if not kom_row or not isinstance(kom_row, dict):
         return None
+    if dip_price is None or dip_net is None:
+        return None
 
     has_tier = any(
         to_float(kom_row.get(col)) is not None and to_float(kom_row.get(col)) > 0
@@ -129,7 +131,7 @@ def evaluate_commission_tariff_bracket(kom_row, dip_price=None, dip_net=None, gu
         if p is not None and p > 0 and r is not None:
             net = round(p - (p * (r / 100.0)), 2)
             b["net"] = net
-            passes_dip_net = (dip_net is None or net >= dip_net - 0.01)
+            passes_dip_net = (net >= dip_net - 0.01)
             b["eligible"] = bool(passes_dip_net and net > 0)
             valid_candidates.append(b)
 
@@ -780,6 +782,22 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             try: dip_rate = to_float(gun_row.get('Komisyon Oranı'))
             except Exception: pass
         dip_net = round(min_dip_val - (min_dip_val * (dip_rate / 100.0)), 2) if (min_dip_val and dip_rate is not None) else None
+        # 0. Komisyon Tarifesi Optimizasyonu (4 Kademeli)
+        kom_tarife_fiyat = None
+        kom_tarife_oran = None
+        kom_tarife_net = None
+        kom_tarife_kademe = None
+        kom_tarife_secimi = None
+        kom_has_eligible = False
+        if kom_row is not None:
+            kom_eval = evaluate_commission_tariff_bracket(kom_row, min_dip_val, dip_net, guncel_fiyat_calc)
+            if kom_eval is not None:
+                kom_tarife_fiyat = kom_eval["price"]
+                kom_tarife_oran = kom_eval["rate"]
+                kom_tarife_net = kom_eval["net"]
+                kom_tarife_kademe = kom_eval["kademe_adi"]
+                kom_tarife_secimi = kom_eval["tariff_selection"]
+                kom_has_eligible = kom_eval["has_eligible"]
 
         # Ürünün katılabileceği kampanyaların tespiti (eligible_campaigns)
         eligible_campaigns = ['Hiçbiri']
@@ -814,9 +832,29 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if rate_2 is not None:
                     net_2 = round(yeni_tsf - (yeni_tsf * (rate_2 / 100.0)), 2)
 
+                # Eğer Komisyon Tarifesinde daha avantajlı/karlı bir kademe varsa (ör. dip netinden veya mevcut netten daha iyi)
                 if (
-                    (av_threshold is not None or yeni_tsf_is_fallback)
-                    and (av_threshold is None or yeni_tsf >= av_threshold - 0.01)
+                    kom_has_eligible
+                    and kom_tarife_fiyat is not None
+                    and kom_tarife_net is not None
+                    and kom_tarife_oran is not None
+                ):
+                    if (
+                        (kom_tarife_fiyat <= yeni_tsf + 0.01 and (net_2 is None or kom_tarife_net >= net_2 - 0.01))
+                        or (net_2 is not None and kom_tarife_net > net_2)
+                    ):
+                        yeni_tsf = kom_tarife_fiyat
+                        rate_2 = kom_tarife_oran
+                        net_2 = kom_tarife_net
+
+                av_floor_check = (
+                    kom_tarife_fiyat
+                    if (kom_has_eligible and kom_tarife_fiyat is not None and (av_threshold is None or kom_tarife_fiyat < av_threshold))
+                    else av_threshold
+                )
+                if (
+                    (av_floor_check is not None or yeni_tsf_is_fallback)
+                    and (av_floor_check is None or yeni_tsf >= av_floor_check - 0.01)
                 ):
                     eligible_campaigns.append('Avantajlı')
                     if net_2 is not None:
@@ -946,7 +984,6 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 price_within_upper_limit = (
                     plus_upper_limit is None or plus_fiyat <= plus_upper_limit + 0.01
                 )
-
                 for period in row_periods:
                     period_rate = (
                         to_float(plus_row.get(period['offer_column']))
@@ -1000,25 +1037,10 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                         smart_candidates.append(('Plus', net_4, plus_fiyat, rate_4, plus_fiyat_is_fallback, muh_plus_row is not None))
 
         # 3.5 Komisyon Tarifesi Kampanyası (4 Kademeli Optimizasyon)
-        kom_tarife_fiyat = None
-        kom_tarife_oran = None
-        kom_tarife_net = None
-        kom_tarife_kademe = None
-        kom_tarife_secimi = None
-        kom_has_eligible = False
-        if kom_row is not None:
-            kom_eval = evaluate_commission_tariff_bracket(kom_row, min_dip_val, dip_net, guncel_fiyat_calc)
-            if kom_eval is not None:
-                kom_tarife_fiyat = kom_eval["price"]
-                kom_tarife_oran = kom_eval["rate"]
-                kom_tarife_net = kom_eval["net"]
-                kom_tarife_kademe = kom_eval["kademe_adi"]
-                kom_tarife_secimi = kom_eval["tariff_selection"]
-                kom_has_eligible = kom_eval["has_eligible"]
-                if kom_has_eligible:
-                    eligible_campaigns.append("Komisyon Tarifesi")
-                    if kom_tarife_net is not None:
-                        smart_candidates.append(("Komisyon Tarifesi", kom_tarife_net, kom_tarife_fiyat, kom_tarife_oran, False, False))
+        if kom_has_eligible:
+            eligible_campaigns.append("Komisyon Tarifesi")
+            if kom_tarife_net is not None:
+                smart_candidates.append(("Komisyon Tarifesi", kom_tarife_net, kom_tarife_fiyat, kom_tarife_oran, False, False))
 
         counter_evaluations = {}
         qualified_extra_labels = set()
@@ -1322,11 +1344,15 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             ilk_main = 'Hiçbiri'
             ilk_extra = 'Hiçbiri'
 
+        effective_dip_fiyat = min([d for d in [min_dip_val, kom_tarife_fiyat] if d is not None]) if (kom_has_eligible and kom_tarife_fiyat is not None) else min_dip_val
+        if kom_has_eligible and kom_tarife_fiyat is not None and (min_dip_val is None or kom_tarife_fiyat < min_dip_val):
+            dip_details.append({'type': 'Komisyon Tarifesi', 'price': kom_tarife_fiyat})
+
         guncel_fiyat_display = guncel_fiyat_calc
         discount_fields = build_discount_fields(
             is_indirim or (len(dip_details) > 0),
             guncel_fiyat_display,
-            min_dip_val,
+            effective_dip_fiyat,
             piyasa_fiyat,
         )
 
@@ -1386,9 +1412,9 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
             'Uygulanabilecek İndirim (%)': discount_fields['Uygulanabilecek İndirim (%)'],
             'Mevcut İndirim (TL)': discount_fields['Mevcut İndirim (TL)'],
             'Mevcut İndirim (%)': discount_fields['Mevcut İndirim (%)'],
-            'Düşülebilecek Dip Fiyat (TL)': min_dip_val,
+            'Düşülebilecek Dip Fiyat (TL)': min([d for d in [min_dip_val, kom_tarife_fiyat] if d is not None]) if (kom_has_eligible and kom_tarife_fiyat is not None) else min_dip_val,
             'campaign_floor_prices': {
-                'Avantajlı': av_threshold if av_threshold is not None else min_dip_val,
+                'Avantajlı': min([d for d in [av_threshold, yeni_tsf] if d is not None]) if (av_threshold is not None or yeni_tsf is not None) else min_dip_val,
                 'Flaş': flas_threshold if flas_threshold is not None else min_dip_val,
                 'Plus': plus_threshold if plus_threshold is not None else min_dip_val,
                 'Komisyon Tarifesi': kom_tarife_fiyat if (kom_has_eligible and kom_tarife_fiyat is not None) else min_dip_val,

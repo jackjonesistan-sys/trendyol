@@ -219,6 +219,75 @@ class CommissionTariffIntegrationTests(unittest.TestCase):
                 self.assertEqual(ws.cell(2, p_idx).value, 800.0)
                 self.assertEqual(ws.cell(2, t_idx).value, "7 Günlük Fiyat")
 
+    def test_advantage_campaign_inherits_more_profitable_commission_tariff_price(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            discount = root / "discount.xlsx"
+            commission = root / "commission.xlsx"
+            current = root / "current.xlsx"
+            advantage = root / "advantage.xlsx"
+            output = root / "output"
+
+            # Dip limit = 3389.55
+            pd.DataFrame([
+                {"BARKOD": "BARKOD-WIN", "Eski Fiyat": 4904, "YENİ Fiyat": 3389.55, "Durum": "İndirim"},
+            ]).to_excel(discount, index=False)
+
+            # Commission tariff has a 3rd bracket at 3380.27 (cheaper price, but commission drops to 20.4% yielding higher net: 2690.69 vs 2667.58)
+            pd.DataFrame([
+                {
+                    "Barkod": "BARKOD-WIN",
+                    "1.Fiyat Alt Limit": 3602.40,
+                    "1.KOMİSYON": 22.0,
+                    "2.Fiyat Üst Limiti": 3602.39,
+                    "2.KOMİSYON": 21.3,
+                    "3.Fiyat Üst Limiti": 3380.27,
+                    "3.KOMİSYON": 20.4,
+                    "4.Fiyat Üst Limiti": 3079.98,
+                    "4.KOMİSYON": 19.0,
+                    "Tarih aralığı (7 Gün)": "18.08-25.08",
+                },
+            ]).to_excel(commission, index=False)
+
+            pd.DataFrame([
+                {
+                    "Barkod": "BARKOD-WIN",
+                    "Komisyon Oranı": 22.0,
+                    "Piyasa Satış Fiyatı (KDV Dahil)": 6000,
+                    "Trendyol'da Satılacak Fiyat (KDV Dahil)": 4904,
+                },
+            ]).to_excel(current, index=False)
+
+            # Advantage list has 3389.55
+            pd.DataFrame([
+                {
+                    "BARKOD": "BARKOD-WIN",
+                    "YENİ TSF (FİYAT GÜNCELLE)": 3389.55,
+                    "1 YILDIZ ÜST FİYAT": 3539.55,
+                },
+            ]).to_excel(advantage, index=False)
+
+            result = calculate_all(
+                {
+                    "discount": discount,
+                    "commission": commission,
+                    "current": current,
+                    "advantage": advantage,
+                },
+                output_dir=output,
+            )
+
+            self.assertTrue(result["success"])
+            row = result["results"][0]
+
+            # Avantajlı must inherit the superior tariff price and rate
+            self.assertEqual(row["Avantajlı Ürün Fiyatı (YENİ TSF) (TL)"], 3380.27)
+            self.assertEqual(row["Avantajlı Ürün Komisyon (%)"], 20.4)
+            self.assertEqual(row["Avantajlı Ürün Kalan Net (TL)"], 2690.69)
+            self.assertEqual(row["Komisyon Tarifesi Fiyatı (TL)"], 3380.27)
+            self.assertEqual(row["Komisyon Tarifesi Net (TL)"], 2690.69)
+            self.assertIn("Avantajlı", row["eligible_campaigns"])
+
 
 if __name__ == "__main__":
     unittest.main()
