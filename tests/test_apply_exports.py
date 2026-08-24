@@ -982,7 +982,7 @@ class ApplyExportTests(unittest.TestCase):
             general = pd.read_excel(run_dir / "Kampanya_Genel_Raporu.xlsx")
             self.assertEqual(general.loc[0, "Uygulanan Kampanya Seçimi"], "Hiçbiri")
             self.assertEqual(general.loc[0, "Uygulanan Ekstra Kampanya Seçimi"], label)
-            unapplied = pd.read_excel(run_dir / "Uygulanmayan_Urunler_Raporu.xlsx")
+            unapplied = pd.read_excel(run_dir / "Kampanya_Genel_Raporu.xlsx", sheet_name="Uygulanmayan_Urunler")
             self.assertTrue(unapplied.empty)
 
     def test_plus_extra_only_target_exports_evaluated_customer_price_and_config_name(self):

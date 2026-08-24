@@ -2187,57 +2187,71 @@ def apply_campaign():
             print("Net İndirim export error:", e)
             return processing_error("Net İndirim dosyası")
 
-    # Ekstra Rapor ve Uygulanmayanlar Excel Çıktıları
+    # Birleşik Rapor Excel Çıktısı (Tek Dosya, 3 Sayfa: Genel Analiz, Özet Rapor, Uygulanmayan Ürünler)
     try:
         df_all = pd.DataFrame(table_data)
         if not df_all.empty:
             if 'checked' in df_all.columns:
                 df_all = df_all.drop(columns=['checked'])
-            if 'userSelection' not in df_all.columns:
-                df_all['userSelection'] = 'Hiçbiri'
-            if 'userExtraSelection' not in df_all.columns:
-                df_all['userExtraSelection'] = 'Hiçbiri'
-            selection_columns = {
-                'userSelection': 'Uygulanan Kampanya Seçimi',
-                'userExtraSelection': 'Uygulanan Ekstra Kampanya Seçimi',
-            }
+            # Seçimleri get_selection ile senkronize et
+            df_all['Uygulanan Kampanya Seçimi'] = df_all['Barkod'].astype(str).str.strip().map(lambda b: get_selection(b)[0])
+            df_all['Uygulanan Ekstra Kampanya Seçimi'] = df_all['Barkod'].astype(str).str.strip().map(lambda b: get_selection(b)[1])
 
-            # 1. Uygulanmayanlar
-            df_unapplied = df_all[
-                (df_all['userSelection'] == 'Hiçbiri')
-                & (df_all['userExtraSelection'] == 'Hiçbiri')
+            # Temiz Kolon Seti (Gereksiz, boş ve ham JSON/sözlük sütunları ayıklanmış)
+            CLEAN_GENEL_COLUMNS = [
+                'Barkod', 'Stok Adedi',
+                'Uygulanan Kampanya Seçimi', 'Uygulanan Ekstra Kampanya Seçimi',
+                'Önerilen Kampanya', 'Önerilen Ekstra Kampanya', 'Uygulanabilir Kampanyalar', 'İndirim Uygulanabilir',
+                'Düşülebilecek Dip Fiyat (TL)', 'Uygulanabilecek İndirim (TL)', 'Uygulanabilecek İndirim (%)',
+                'Mevcut İndirim (TL)', 'Mevcut İndirim (%)',
+                'Güncel Ürün Fiyatı (TL)', 'Güncel Ürün Komisyon (%)', 'Güncel Ürün Kalan Net (TL)',
+                'Avantajlı Ürün Fiyatı (YENİ TSF) (TL)', 'Avantajlı Ürün Komisyon (%)', 'Avantajlı Ürün Kalan Net (TL)',
+                'Flaş Ürün 24 Saat Fiyatı (TL)', 'Flaş Ürün Komisyon (%)', 'Flaş Ürün Kalan Net (TL)',
+                'Plus Fiyatı (TL)', 'Plus Tarife Seçimi', 'Plus Komisyon (%)', 'Plus Net (TL)',
+                'Komisyon Tarifesi Fiyatı (TL)', 'Komisyon Tarifesi Komisyon (%)', 'Komisyon Tarifesi Net (TL)',
+                'Komisyon Tarifesi Kademe', 'Komisyon Tarifesi Seçimi'
+            ]
+            present_genel_cols = [c for c in CLEAN_GENEL_COLUMNS if c in df_all.columns]
+            df_genel_clean = df_all[present_genel_cols].copy()
+
+            # 2. Sayfa: Özet Rapor (Sayfada seçilen görünür sütunlar)
+            df_summary = build_report_dataframe(table_data, visible_columns)
+
+            # 3. Sayfa: Uygulanmayan Ürünler
+            UNAPPLIED_COLUMNS = [
+                'Barkod', 'Stok Adedi',
+                'Güncel Ürün Fiyatı (TL)', 'Güncel Ürün Komisyon (%)', 'Güncel Ürün Kalan Net (TL)',
+                'Düşülebilecek Dip Fiyat (TL)', 'Uygulanabilecek İndirim (TL)', 'Uygulanabilecek İndirim (%)',
+                'Önerilen Kampanya', 'Uygulanabilir Kampanyalar'
+            ]
+            df_unapp = df_all[
+                (df_all['Uygulanan Kampanya Seçimi'] == 'Hiçbiri')
+                & (df_all['Uygulanan Ekstra Kampanya Seçimi'] == 'Hiçbiri')
             ].copy()
-            df_unapplied.rename(columns=selection_columns, inplace=True)
-            out_unapplied = os.path.join(run_output_dir, "Uygulanmayan_Urunler_Raporu.xlsx")
-            df_unapplied.to_excel(out_unapplied, index=False)
-            fix_xlsx_for_trendyol(out_unapplied)
-            generated_files.append(os.path.join(timestamp_folder, "Uygulanmayan_Urunler_Raporu.xlsx"))
-            
-            # 2. Tüm Rapor
-            df_all.rename(columns=selection_columns, inplace=True)
+            unapp_present = [c for c in UNAPPLIED_COLUMNS if c in df_unapp.columns]
+            df_unapplied_clean = df_unapp[unapp_present].copy()
+
+            # Tek Birleşik Excel Dosyası Olarak Kaydet
             out_report = os.path.join(run_output_dir, "Kampanya_Genel_Raporu.xlsx")
-            df_all.to_excel(out_report, index=False)
+            with pd.ExcelWriter(out_report, engine="openpyxl") as writer:
+                df_genel_clean.to_excel(writer, sheet_name="Genel_Analiz_Raporu", index=False)
+                df_summary.to_excel(writer, sheet_name="Kampanya_Ozet_Raporu", index=False)
+                df_unapplied_clean.to_excel(writer, sheet_name="Uygulanmayan_Urunler", index=False)
+
+            # Formatlama (A2 Sabitleme, Otomatik Filtre ve Kolon Genişlikleri)
+            wb_rep = openpyxl.load_workbook(out_report)
+            for sheet in wb_rep.worksheets:
+                sheet.freeze_panes = "A2"
+                sheet.auto_filter.ref = sheet.dimensions
+                for col_idx in range(1, sheet.max_column + 1):
+                    letter = openpyxl.utils.get_column_letter(col_idx)
+                    max_len = max(len(str(sheet.cell(1, col_idx).value or "")), 10)
+                    sheet.column_dimensions[letter].width = max(max_len + 3, 12)
+            wb_rep.save(out_report)
             fix_xlsx_for_trendyol(out_report)
             generated_files.append(os.path.join(timestamp_folder, "Kampanya_Genel_Raporu.xlsx"))
-            
-            # 3. Sayfada seçilen sütunlarla aynı sıradaki özet rapor
-            df_summary = build_report_dataframe(table_data, visible_columns)
-            out_summary = os.path.join(run_output_dir, "Kampanya_Ozet_Raporu.xlsx")
-            write_report_excel(df_summary, out_summary)
-            fix_xlsx_for_trendyol(out_summary)
-            generated_files.append(os.path.join(timestamp_folder, "Kampanya_Ozet_Raporu.xlsx"))
-            
-            try:
-                from fiyat_farki_analiz_script import generate_fiyat_farki_raporu
-                generate_fiyat_farki_raporu(run_output_dir, input_files.get("discount"))
-                out_kiyas = os.path.join(run_output_dir, "Indirim_Uygulanmayan_Fiyat_Kiyas_Raporu.xlsx")
-                if os.path.exists(out_kiyas):
-                    fix_xlsx_for_trendyol(out_kiyas)
-                generated_files.append(os.path.join(timestamp_folder, "Indirim_Uygulanmayan_Fiyat_Kiyas_Raporu.xlsx"))
-            except Exception as e:
-                print("Kıyas Raporu hatası:", str(e))
-                pass
-    except Exception:
+    except Exception as e:
+        print("Rapor oluşturma hatası:", e)
         return processing_error("Rapor")
         
     files_str = "\n".join([f"- {f}" for f in generated_files])
