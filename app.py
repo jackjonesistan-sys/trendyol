@@ -34,7 +34,14 @@ from input_files import (
     load_upload_status,
     save_upload_set,
     load_counter_configs,
+    save_counter_configs,
     load_plus_extra_configs,
+    save_plus_extra_configs,
+    load_coupon_configs,
+    save_coupon_configs,
+    load_net_discount_config,
+    save_net_discount_config,
+    save_single_file_enabled,
     load_recommendation_rule,
     save_single_file_expiries,
     load_user_selections,
@@ -50,6 +57,17 @@ from xlsx_postprocess import fix_xlsx_for_trendyol
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 240 * 1024 * 1024
+
+try:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+except Exception:
+    pass
+
+@app.after_request
+def add_custom_headers(response):
+    response.headers["ngrok-skip-browser-warning"] = "1"
+    return response
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR = os.path.join(BASE_DIR, "Girdiler")
@@ -2263,4 +2281,13 @@ def apply_campaign():
     })
 
 if __name__ == "__main__":
-    app.run(port=5114, debug=True)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", 5114))
+    print(f"\n=======================================================")
+    print(f"🚀 Trendyol Kampanya Hesaplama Motoru Aktif")
+    print(f"📍 Localhost / Yerel Tarayıcı : http://localhost:{port}")
+    print(f"📍 Yerel IP                   : http://127.0.0.1:{port}")
+    print(f"🌐 Ağ / Tüm Arayüzler (Host)  : http://0.0.0.0:{port}")
+    print(f"🔗 Ngrok ile Dışarı Açma      : ngrok http {port}")
+    print(f"=======================================================\n")
+    app.run(host=host, port=port, debug=True)

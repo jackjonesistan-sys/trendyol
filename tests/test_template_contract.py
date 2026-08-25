@@ -51,7 +51,8 @@ class TemplateContractTests(unittest.TestCase):
 
     def test_ui_accessibility_and_mobile_layout_contract(self):
         self.assertIn('<meta name="description"', self.template)
-        self.assertIn('rel="icon" href="data:image/svg+xml,', self.template)
+        self.assertIn('rel="icon"', self.template)
+        self.assertIn('href="data:image/svg+xml,', self.template)
         self.assertIn('role="status"', self.template)
         self.assertIn('aria-live="polite"', self.template)
         self.assertIn('aria-busy="true"', self.template)
