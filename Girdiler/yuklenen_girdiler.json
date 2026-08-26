@@ -9,42 +9,44 @@
     "commission": {
       "stored_name": "commission.xlsx",
       "original_name": "Ürün Komisyon Tarifeleri.xlsx",
-      "uploaded_at": "2026-08-18T10:39:32+03:00",
-      "expiry_date": "2026-08-25T07:59"
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
+      "expiry_date": "2026-09-01T07:59"
     },
     "current": {
       "stored_name": "current.xlsx",
       "original_name": "Ürün Listesi.xlsx",
-      "uploaded_at": "2026-08-18T10:39:32+03:00",
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
       "expiry_date": "2026-12-31T14:15"
     },
     "advantage": {
       "stored_name": "advantage.xlsx",
       "original_name": "Avantajlı Ürün Etiketleri.xlsx",
-      "uploaded_at": "2026-08-18T10:39:32+03:00",
-      "expiry_date": "2026-08-25T07:59",
-      "enabled": true
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
+      "expiry_date": "2026-09-01T07:59"
     },
     "flash": {
       "stored_name": "flash.xlsx",
       "original_name": "Flaş Ürünler.xlsx",
-      "uploaded_at": "2026-08-18T10:39:32+03:00",
-      "expiry_date": "2026-08-24T23:59",
-      "enabled": true
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
+      "expiry_date": "2026-08-31T23:59"
     },
     "plus": {
       "stored_name": "plus.xlsx",
       "original_name": "Plus Komisyon Tarifeleri.xlsx",
-      "uploaded_at": "2026-08-18T10:39:32+03:00",
-      "expiry_date": "2026-08-25T07:59",
-      "enabled": true
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
+      "expiry_date": "2026-09-01T07:59"
     },
     "muhasebe_avantaj": {
       "stored_name": "muhasebe_avantaj.xlsx",
-      "original_name": "avantaj.xlsx",
-      "uploaded_at": "2026-08-18T11:15:42+03:00",
-      "expiry_date": "2026-08-25T07:59",
-      "enabled": true
+      "original_name": "5db0474060584d5f831741fa0a456f4a.xlsx",
+      "uploaded_at": "2026-08-26T10:11:52+03:00",
+      "enabled": true,
+      "expiry_date": "2026-09-01T07:59"
     }
   },
   "counter_configs": [
@@ -520,7 +522,7 @@
       "extra": "Hiçbiri"
     },
     "G1M13-KOKO4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "G1M13-KOKO5090": {
@@ -536,7 +538,7 @@
       "extra": "Hiçbiri"
     },
     "G1M14-KOKO4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "G1M14-KOKO5090": {
@@ -648,7 +650,7 @@
       "extra": "Hiçbiri"
     },
     "G1M20-KOKO4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "G1M20-KOKO5090": {
@@ -1736,7 +1738,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-100x150-YST400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-100x150-YST401": {
@@ -1764,7 +1766,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-40x70-YST400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-40x70-YST401": {
@@ -1780,7 +1782,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-40x70-YST404": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-40x70-YST405": {
@@ -1824,7 +1826,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-60x100-YST401": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-60x100-YST402": {
@@ -1856,7 +1858,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-80x120-YST402": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-GRI-80x120-YST403": {
@@ -1960,7 +1962,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-KIRMIZI-50x90-YST400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-KIRMIZI-50x90-YST401": {
@@ -2188,7 +2190,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-TURKUAZ-80x120-YST401": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BASKILI-TURKUAZ-80x120-YST402": {
@@ -2212,7 +2214,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BSKLI-R-M1-40x70-GRI": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIK-BSKLI-R-M1-50x90-GRI": {
@@ -2224,11 +2226,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1000": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1050": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1100": {
@@ -2244,7 +2246,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1250": {
@@ -2256,7 +2258,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1350": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x1400": {
@@ -2284,11 +2286,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x35": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x350": {
@@ -2316,15 +2318,15 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-100x850": {
@@ -2372,7 +2374,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x1400": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x1450": {
@@ -2396,7 +2398,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x350": {
@@ -2404,7 +2406,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x450": {
@@ -2412,7 +2414,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x550": {
@@ -2420,7 +2422,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x650": {
@@ -2428,7 +2430,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x750": {
@@ -2448,7 +2450,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-120x950": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-40x70": {
@@ -2464,7 +2466,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-50x90": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-GRI-60x100": {
@@ -2628,7 +2630,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-KIRMIZI-100x1400": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-KIRMIZI-100x1450": {
@@ -2832,7 +2834,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-KIRMIZI-50x90": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-KIRMIZI-60x100": {
@@ -2960,11 +2962,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x1000": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x1050": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x1100": {
@@ -2976,7 +2978,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x120": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x1200": {
@@ -3012,7 +3014,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x200": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x250": {
@@ -3024,11 +3026,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x450": {
@@ -3040,7 +3042,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x600": {
@@ -3048,7 +3050,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x700": {
@@ -3056,7 +3058,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-100x800": {
@@ -3076,11 +3078,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x1000": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x1050": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x1100": {
@@ -3144,7 +3146,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x500": {
@@ -3152,11 +3154,11 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x650": {
@@ -3176,7 +3178,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x850": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-120x900": {
@@ -3192,7 +3194,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-50x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-50x120": {
@@ -3204,7 +3206,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-60x100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS-SIYAH-80x100": {
@@ -3816,7 +3818,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-GRI-120x1050": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-GRI-120x1100": {
@@ -3936,7 +3938,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-GRI-50x90": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-GRI-60x100": {
@@ -4024,7 +4026,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-100x1400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-100x1450": {
@@ -4188,7 +4190,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-120x700": {
@@ -4228,7 +4230,7 @@
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-50x90": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "KIVIRCIKPASPAS2-KIRMIZI-60x100": {
@@ -5888,7 +5890,7 @@
       "extra": "Hiçbiri"
     },
     "KOKO--50x90--ST425": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KOKO--50x90--ST426": {
@@ -6168,7 +6170,7 @@
       "extra": "Hiçbiri"
     },
     "KPBP21-4060-GRI": {
-      "main": "Avantajlı",
+      "main": "Plus",
       "extra": "Hiçbiri"
     },
     "KPBP22-4060-GRI": {
@@ -6188,7 +6190,7 @@
       "extra": "Hiçbiri"
     },
     "KPBP3-4060-GRI": {
-      "main": "Plus",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "KPBP3-4060-MAVI": {
@@ -6216,7 +6218,7 @@
       "extra": "Hiçbiri"
     },
     "KPBP6-4060-MAVI": {
-      "main": "Avantajlı",
+      "main": "Plus",
       "extra": "Hiçbiri"
     },
     "KPBP7-4060-GRI": {
@@ -6364,7 +6366,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-100100-G": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100100-K": {
@@ -6384,7 +6386,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-100200": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100200-G": {
@@ -6464,7 +6466,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-100x120-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100x1200-G": {
@@ -6548,7 +6550,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-100x1500-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100x250-G": {
@@ -6556,11 +6558,11 @@
       "extra": "Hiçbiri"
     },
     "NA100-100x250-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100x250-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-100x350-G": {
@@ -6708,7 +6710,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-100x950-G": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA100-100x950-K": {
@@ -6784,11 +6786,11 @@
       "extra": "Hiçbiri"
     },
     "NA100-120x150-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-120x150-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-120x1500-G": {
@@ -6800,7 +6802,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-120x1500-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-120x200-G": {
@@ -6812,7 +6814,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-120x200-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-120x250-G": {
@@ -7080,11 +7082,11 @@
       "extra": "Hiçbiri"
     },
     "NA100-50x120-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-60100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA100-60100-K": {
@@ -7100,7 +7102,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-80120-G": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80120-K": {
@@ -7120,7 +7122,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-80x150-G": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x150-K": {
@@ -7144,11 +7146,11 @@
       "extra": "Hiçbiri"
     },
     "NA100-80x250-G": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x250-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x250-S": {
@@ -7160,7 +7162,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-80x300-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x300-S": {
@@ -7172,11 +7174,11 @@
       "extra": "Hiçbiri"
     },
     "NA100-80x350-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x350-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x400-G": {
@@ -7208,7 +7210,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-80x500-K": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100-80x500-S": {
@@ -7332,7 +7334,7 @@
       "extra": "Hiçbiri"
     },
     "NA100-90150-S": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA100OZELG-150200": {
@@ -7376,11 +7378,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-100200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-100300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-50150": {
@@ -7392,7 +7394,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-60100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-100x1050": {
@@ -7420,7 +7422,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-100x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-100x850": {
@@ -7512,7 +7514,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x450": {
@@ -7532,11 +7534,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x700": {
@@ -7548,7 +7550,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-100x900": {
@@ -7556,7 +7558,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x1000": {
@@ -7580,7 +7582,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x1500": {
@@ -7596,7 +7598,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x350": {
@@ -7604,7 +7606,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x450": {
@@ -7616,11 +7618,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x600": {
@@ -7628,7 +7630,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x700": {
@@ -7640,7 +7642,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-GRI-RAMPASIZ-120x900": {
@@ -7656,11 +7658,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x1050": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x1100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x1150": {
@@ -7688,7 +7690,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x1400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x1450": {
@@ -7712,11 +7714,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x450": {
@@ -7732,11 +7734,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x650": {
@@ -7744,11 +7746,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x80": {
@@ -7756,11 +7758,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x800": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-100x900": {
@@ -7800,11 +7802,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x1300": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x1350": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x1400": {
@@ -7816,19 +7818,19 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x150": {
-      "main": "Hiçbiri",
-      "extra": "Hiçbiri"
-    },
-    "NA107-KIVIRCIK-KIRMIZI-120x1500": {
       "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
-    "NA107-KIVIRCIK-KIRMIZI-120x200": {
+    "NA107-KIVIRCIK-KIRMIZI-120x1500": {
       "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
+    "NA107-KIVIRCIK-KIRMIZI-120x200": {
+      "main": "Avantajlı",
+      "extra": "Hiçbiri"
+    },
     "NA107-KIVIRCIK-KIRMIZI-120x250": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x300": {
@@ -7840,7 +7842,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x50": {
@@ -7848,19 +7850,19 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x700": {
@@ -7880,7 +7882,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x850": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-120x900": {
@@ -7892,7 +7894,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-300x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-40x70": {
@@ -7916,7 +7918,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-60x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x100": {
@@ -7924,11 +7926,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1050": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1100": {
@@ -7936,11 +7938,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x120": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1200": {
@@ -7964,7 +7966,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x1500": {
@@ -7972,11 +7974,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x250": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x300": {
@@ -7984,11 +7986,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x450": {
@@ -8008,11 +8010,11 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x750": {
@@ -8020,15 +8022,15 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x900": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-KIRMIZI-80x950": {
@@ -8304,7 +8306,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-SIYAH-50x90": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-SIYAH-60x100": {
@@ -8740,7 +8742,7 @@
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-TURKUAZ-80x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "NA107-KIVIRCIK-TURKUAZ-80x1500": {
@@ -8840,7 +8842,7 @@
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL10": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL11": {
@@ -8864,15 +8866,15 @@
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL16": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL17": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL18": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL19": {
@@ -8908,7 +8910,7 @@
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL3": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL4": {
@@ -8920,7 +8922,7 @@
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL6": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "POLI-40x60-MODEL7": {
@@ -8980,7 +8982,7 @@
       "extra": "Hiçbiri"
     },
     "POLI-MODEL2-40x60": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "POLI-MODEL20-40x60": {
@@ -9004,7 +9006,7 @@
       "extra": "Hiçbiri"
     },
     "POLI-MODEL7-40x60": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "POLI-MODEL8-40x60": {
@@ -9016,11 +9018,11 @@
       "extra": "Hiçbiri"
     },
     "RAMPALIPOLI-40x60": {
-      "main": "Avantajlı",
+      "main": "Komisyon Tarifesi",
       "extra": "Hiçbiri"
     },
     "RAMPALIPOLI-50x80": {
-      "main": "Hiçbiri",
+      "main": "Komisyon Tarifesi",
       "extra": "Hiçbiri"
     },
     "SP1-3360": {
@@ -9032,7 +9034,7 @@
       "extra": "Hiçbiri"
     },
     "SP1-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "SP1-5090": {
@@ -9264,7 +9266,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x1450": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x1500": {
@@ -9276,7 +9278,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x400": {
@@ -9284,7 +9286,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x500": {
@@ -9316,11 +9318,11 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x900": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-100x950": {
@@ -9332,7 +9334,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1050": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1100": {
@@ -9344,7 +9346,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1200": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1250": {
@@ -9352,11 +9354,11 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1300": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1350": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1400": {
@@ -9364,7 +9366,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1450": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x150": {
@@ -9372,7 +9374,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x1500": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x200": {
@@ -9392,11 +9394,11 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x500": {
@@ -9408,11 +9410,11 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-120x700": {
@@ -9452,7 +9454,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x1050": {
@@ -9480,7 +9482,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x1400": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x1450": {
@@ -9488,7 +9490,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x150": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x1500": {
@@ -9536,7 +9538,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x750": {
@@ -9556,7 +9558,7 @@
       "extra": "Hiçbiri"
     },
     "ST106-KIVIRCIK-GRI-80x950": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST107-100150": {
@@ -9592,7 +9594,7 @@
       "extra": "Hiçbiri"
     },
     "ST108-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST108-5090": {
@@ -9636,7 +9638,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-100200": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-100300": {
@@ -9652,7 +9654,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-50150": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-5090": {
@@ -9660,15 +9662,15 @@
       "extra": "Hiçbiri"
     },
     "ST110-60100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-80120": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x1000": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x1050": {
@@ -9684,7 +9686,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x120": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x1200": {
@@ -9724,7 +9726,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x400": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x450": {
@@ -9732,7 +9734,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x500": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x550": {
@@ -9740,7 +9742,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x600": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-100x650": {
@@ -9812,7 +9814,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-120x150": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-120x1500": {
@@ -9888,11 +9890,11 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-50x100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-50x120": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-50x90": {
@@ -9900,7 +9902,7 @@
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-80x100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST110-KIVIRCIK-KIRMIZI-80x1000": {
@@ -10040,7 +10042,7 @@
       "extra": "Hiçbiri"
     },
     "ST120-4060": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST120-4070": {
@@ -10660,7 +10662,7 @@
       "extra": "Hiçbiri"
     },
     "ST156-4060": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST156-4070": {
@@ -10728,7 +10730,7 @@
       "extra": "Hiçbiri"
     },
     "ST16-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST16-5090": {
@@ -10744,7 +10746,7 @@
       "extra": "Hiçbiri"
     },
     "ST160-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST160-5090": {
@@ -11248,11 +11250,11 @@
       "extra": "Hiçbiri"
     },
     "ST3-4060": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST3-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST3-5090": {
@@ -11336,7 +11338,7 @@
       "extra": "Hiçbiri"
     },
     "ST34-5090": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST35-3360": {
@@ -11940,11 +11942,11 @@
       "extra": "Hiçbiri"
     },
     "ST69-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST69-5090": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ST7-3360": {
@@ -12020,11 +12022,11 @@
       "extra": "Hiçbiri"
     },
     "ST73-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST73-5090": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST74-3360": {
@@ -12212,7 +12214,7 @@
       "extra": "Hiçbiri"
     },
     "ST84-4070": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ST84-5090": {
@@ -12520,15 +12522,15 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-40x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-40x200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-40x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-40x400": {
@@ -12552,7 +12554,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-50x200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-50x300": {
@@ -12564,7 +12566,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-50x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-GRI-RAMPASIZ-50x600": {
@@ -12576,7 +12578,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-GRI-100x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-GRI-100x150": {
@@ -12608,7 +12610,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KAHVE-100x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KAHVE-33x60": {
@@ -12632,11 +12634,11 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KIRMIZI-100x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KIRMIZI-100x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KIRMIZI-33x60": {
@@ -12656,15 +12658,15 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-KIRMIZI-80x120": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-SARI-100x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-SARI-100x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-SARI-33x60": {
@@ -12684,7 +12686,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-SARI-80x120": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-TURUNCU-100x100": {
@@ -12692,7 +12694,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-TURUNCU-100x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-TURUNCU-33x60": {
@@ -12712,15 +12714,15 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-TURUNCU-80x120": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-YESIL-100x100": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-YESIL-100x150": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-YESIL-33x60": {
@@ -12740,7 +12742,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IP3-YESIL-80x120": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-GRI-100100": {
@@ -12896,7 +12898,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-GRI-120200": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-GRI-120250": {
@@ -13140,7 +13142,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-100120": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-1001200": {
@@ -13376,7 +13378,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-5090": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-60100": {
@@ -13400,7 +13402,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-80250": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-KIRMIZI-80300": {
@@ -13744,7 +13746,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-SIYAH-50100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP1-SIYAH-50120": {
@@ -13888,7 +13890,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-GRI-100120": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-GRI-1001200": {
@@ -14500,7 +14502,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-KIRMIZI-40x60": {
-      "main": "Avantajlı",
+      "main": "Komisyon Tarifesi",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-KIRMIZI-40x70": {
@@ -14888,7 +14890,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-SIYAH-40x60": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-IYP2-RAMPASIZ-SIYAH-40x70": {
@@ -15196,7 +15198,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-RAMPASIZ-KIRMIZI-40x60": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-RAMPASIZ-KIRMIZI-40x70": {
@@ -15216,7 +15218,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-RAMPASIZ-SIYAH-40x60": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-RAMPASIZ-SIYAH-40x70": {
@@ -15240,7 +15242,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-SIYAH-RAMPASIZ-40x300": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-SIYAH-RAMPASIZ-40x400": {
@@ -15260,7 +15262,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-SIYAH-RAMPASIZ-50x100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-SIYAH-RAMPASIZ-50x200": {
@@ -15520,7 +15522,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-GRI-3360": {
-      "main": "Flaş",
+      "main": "Plus",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-GRI-4070": {
@@ -15808,7 +15810,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-120250": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-120300": {
@@ -15848,7 +15850,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-120750": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-120800": {
@@ -15888,7 +15890,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-3360": {
-      "main": "Flaş",
+      "main": "Plus",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-4070": {
@@ -15908,7 +15910,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-60100": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-801000": {
@@ -15940,7 +15942,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-80400": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-KIRMIZI-80450": {
@@ -16256,7 +16258,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-SIYAH-3360": {
-      "main": "Avantajlı",
+      "main": "Plus",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP1-SIYAH-4070": {
@@ -16416,7 +16418,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1050-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1050-KIRMIZI": {
@@ -16440,7 +16442,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1150-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1150-KIRMIZI": {
@@ -16524,7 +16526,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1450-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x1450-KIRMIZI": {
@@ -16588,7 +16590,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x300-KIRMIZI": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x300-SIYAH": {
@@ -16704,7 +16706,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x800-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x800-KIRMIZI": {
@@ -16716,7 +16718,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x850-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x850-KIRMIZI": {
@@ -16728,7 +16730,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x900-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-100x900-KIRMIZI": {
@@ -16788,7 +16790,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x1150-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x1150-KIRMIZI": {
@@ -17004,7 +17006,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x650-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x650-KIRMIZI": {
@@ -17016,7 +17018,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x700-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x700-KIRMIZI": {
@@ -17028,7 +17030,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x750-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x750-KIRMIZI": {
@@ -17040,7 +17042,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x800-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x800-KIRMIZI": {
@@ -17052,7 +17054,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x850-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-120x850-KIRMIZI": {
@@ -17144,7 +17146,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-60x100-SIYAH": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x100-GRI": {
@@ -17160,7 +17162,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1000-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1000-KIRMIZI": {
@@ -17184,7 +17186,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1100-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1100-KIRMIZI": {
@@ -17220,7 +17222,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1200-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1200-KIRMIZI": {
@@ -17232,7 +17234,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1250-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1250-KIRMIZI": {
@@ -17268,7 +17270,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1400-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x1400-KIRMIZI": {
@@ -17472,7 +17474,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x850-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x850-KIRMIZI": {
@@ -17496,7 +17498,7 @@
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x950-GRI": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "TOZKONTROL-YP2-80x950-KIRMIZI": {
@@ -17584,7 +17586,7 @@
       "extra": "Hiçbiri"
     },
     "TYKOP4070371": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "TYKOP4070383": {
@@ -17608,7 +17610,7 @@
       "extra": "Hiçbiri"
     },
     "TYKOP4070585": {
-      "main": "Avantajlı",
+      "main": "Flaş",
       "extra": "Hiçbiri"
     },
     "TYKOP5090333": {
@@ -17736,11 +17738,11 @@
       "extra": "Hiçbiri"
     },
     "YS5-4070": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "YS5-5090": {
-      "main": "Flaş",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-120x1000": {
@@ -17756,7 +17758,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-120x200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-120x250": {
@@ -17808,7 +17810,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-120x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-120x900": {
@@ -17832,7 +17834,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x120": {
@@ -17852,27 +17854,27 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x600": {
@@ -17880,11 +17882,11 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x800": {
@@ -17896,11 +17898,11 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-GRI-90x900": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x120": {
@@ -17924,47 +17926,47 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x900": {
@@ -17972,7 +17974,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-120x950": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-40x70": {
@@ -18020,7 +18022,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x500": {
@@ -18036,15 +18038,15 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x90": {
@@ -18052,11 +18054,11 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-KIRMIZI-90x900": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x120": {
@@ -18068,7 +18070,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x200": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x250": {
@@ -18080,7 +18082,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x350": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x400": {
@@ -18088,7 +18090,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x450": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x500": {
@@ -18096,15 +18098,15 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x700": {
@@ -18128,7 +18130,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-120x950": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-40x70": {
@@ -18144,7 +18146,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x120": {
@@ -18160,11 +18162,11 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x250": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x350": {
@@ -18172,7 +18174,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x450": {
@@ -18184,7 +18186,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x600": {
@@ -18192,7 +18194,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-MAVI-90x700": {
@@ -18212,7 +18214,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x120": {
@@ -18228,7 +18230,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x250": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x300": {
@@ -18240,7 +18242,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x450": {
@@ -18248,35 +18250,35 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x550": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x600": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x750": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x850": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x900": {
@@ -18284,7 +18286,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-120x950": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-40x70": {
@@ -18300,7 +18302,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x1000": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x120": {
@@ -18308,11 +18310,11 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x150": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x200": {
-      "main": "Avantajlı",
+      "main": "Hiçbiri",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x250": {
@@ -18320,7 +18322,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x300": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x350": {
@@ -18328,7 +18330,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x400": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x450": {
@@ -18336,7 +18338,7 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x500": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x550": {
@@ -18348,15 +18350,15 @@
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x650": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x700": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x800": {
-      "main": "Hiçbiri",
+      "main": "Avantajlı",
       "extra": "Hiçbiri"
     },
     "ZMAT-SIYAH-90x90": {

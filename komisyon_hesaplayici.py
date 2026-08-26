@@ -832,26 +832,7 @@ def calculate_all(input_files, counter_files=None, plus_extra_files=None, coupon
                 if rate_2 is not None:
                     net_2 = round(yeni_tsf - (yeni_tsf * (rate_2 / 100.0)), 2)
 
-                # Eğer Komisyon Tarifesinde daha avantajlı/karlı bir kademe varsa (ör. dip netinden veya mevcut netten daha iyi)
-                if (
-                    kom_has_eligible
-                    and kom_tarife_fiyat is not None
-                    and kom_tarife_net is not None
-                    and kom_tarife_oran is not None
-                ):
-                    if (
-                        (kom_tarife_fiyat <= yeni_tsf + 0.01 and (net_2 is None or kom_tarife_net >= net_2 - 0.01))
-                        or (net_2 is not None and kom_tarife_net > net_2)
-                    ):
-                        yeni_tsf = kom_tarife_fiyat
-                        rate_2 = kom_tarife_oran
-                        net_2 = kom_tarife_net
-
-                av_floor_check = (
-                    kom_tarife_fiyat
-                    if (kom_has_eligible and kom_tarife_fiyat is not None and (av_threshold is None or kom_tarife_fiyat < av_threshold))
-                    else av_threshold
-                )
+                av_floor_check = av_threshold
                 if (
                     (av_floor_check is not None or yeni_tsf_is_fallback)
                     and (av_floor_check is None or yeni_tsf >= av_floor_check - 0.01)

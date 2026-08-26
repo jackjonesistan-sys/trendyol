@@ -219,7 +219,7 @@ class CommissionTariffIntegrationTests(unittest.TestCase):
                 self.assertEqual(ws.cell(2, p_idx).value, 800.0)
                 self.assertEqual(ws.cell(2, t_idx).value, "7 Günlük Fiyat")
 
-    def test_advantage_campaign_inherits_more_profitable_commission_tariff_price(self):
+    def test_advantage_campaign_preserves_its_authentic_price(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             discount = root / "discount.xlsx"
@@ -280,13 +280,14 @@ class CommissionTariffIntegrationTests(unittest.TestCase):
             self.assertTrue(result["success"])
             row = result["results"][0]
 
-            # Avantajlı must inherit the superior tariff price and rate
-            self.assertEqual(row["Avantajlı Ürün Fiyatı (YENİ TSF) (TL)"], 3380.27)
-            self.assertEqual(row["Avantajlı Ürün Komisyon (%)"], 20.4)
-            self.assertEqual(row["Avantajlı Ürün Kalan Net (TL)"], 2690.69)
+            # Avantajlı must preserve its own authentic price while Komisyon Tarifesi has the tariff price
+            self.assertEqual(row["Avantajlı Ürün Fiyatı (YENİ TSF) (TL)"], 3389.55)
+            self.assertEqual(row["Avantajlı Ürün Komisyon (%)"], 22.0)
+            self.assertEqual(row["Avantajlı Ürün Kalan Net (TL)"], 2643.85)
             self.assertEqual(row["Komisyon Tarifesi Fiyatı (TL)"], 3380.27)
             self.assertEqual(row["Komisyon Tarifesi Net (TL)"], 2690.69)
             self.assertIn("Avantajlı", row["eligible_campaigns"])
+            self.assertIn("Komisyon Tarifesi", row["eligible_campaigns"])
 
 
 if __name__ == "__main__":
